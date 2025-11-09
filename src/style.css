@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600&family=Work+Sans:wght@400;500;600&display=swap');
+
+@theme {
+  --color-amber-gold: #D9A441;
+  --color-light-neutral: #FAFAF8;
+  --color-charcoal: #212121;
+  --color-mid-grey: #BDBDBD;
+  --color-deep-green: #3C6E47;
+  --color-divider: #E0E0E0;
+  
+  --font-heading: 'Inter', 'Source Sans Pro', sans-serif;
+  --font-body: 'Noto Sans', 'Work Sans', sans-serif;
+  
+  --spacing-header: 60px;
+  --spacing-sidebar: 180px;
+  
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+@layer base {
+  body {
+    @apply bg-light-neutral text-charcoal font-body;
+    font-size: 14px;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+  
+  h1 {
+    @apply text-3xl font-bold;
+  }
+  
+  h2 {
+    @apply text-2xl font-bold;
+  }
+  
+  h3 {
+    @apply text-xl font-semibold;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-divider rounded-lg p-4;
+    box-shadow: var(--shadow-card);
+  }
+  
+  .btn-primary {
+    @apply bg-amber-gold text-white px-4 py-2 rounded-md font-medium hover:brightness-110 transition-all;
+  }
+  
+  .btn-secondary {
+    @apply border border-charcoal text-charcoal px-4 py-2 rounded-md font-medium hover:bg-charcoal hover:text-white transition-all;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+  opacity: 0;
+}
