@@ -20,11 +20,13 @@ interface Connection {
 interface SiteFlowVisualizerProps {
   appDescription?: string
   prdContent?: string
+  onSiteFlowChange?: (data: SiteFlowData) => void
+  initialSiteFlow?: SiteFlowData
 }
 
-const SiteFlowVisualizer = ({ appDescription = '', prdContent }: SiteFlowVisualizerProps) => {
-  const [nodes, setNodes] = useState<Node[]>([])
-  const [connections, setConnections] = useState<Connection[]>([])
+const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange, initialSiteFlow }: SiteFlowVisualizerProps) => {
+  const [nodes, setNodes] = useState<Node[]>(initialSiteFlow?.nodes || [])
+  const [connections, setConnections] = useState<Connection[]>(initialSiteFlow?.connections || [])
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
   const [zoom, setZoom] = useState(1)
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
@@ -46,13 +48,27 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent }: SiteFlowVisuali
   const canvasContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Prioritize PRD content if available, otherwise use app description
+    // If initial site flow is provided, use it and don't regenerate
+    if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
+      setNodes(initialSiteFlow.nodes)
+      setConnections(initialSiteFlow.connections)
+      return
+    }
+    
+    // Otherwise, generate from PRD or description
     if (prdContent && prdContent.trim()) {
       generateFlowFromPRDAsync(prdContent)
     } else if (appDescription && appDescription.trim()) {
       generateFlowFromDescriptionAsync(appDescription)
     }
-  }, [appDescription, prdContent])
+  }, [appDescription, prdContent, initialSiteFlow])
+
+  // Notify parent when site flow changes
+  useEffect(() => {
+    if (onSiteFlowChange && nodes.length > 0) {
+      onSiteFlowChange({ nodes, connections })
+    }
+  }, [nodes, connections, onSiteFlowChange])
 
   // Save to history
   const saveToHistory = useCallback(() => {

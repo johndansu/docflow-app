@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import DocumentViewer from '../DocumentGeneration/DocumentViewer'
 import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
-import { storage } from '../../utils/storage'
+import { storage, type SiteFlowData } from '../../utils/storage'
 import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories } from '../../utils/contentGenerator'
 
 type View = 'input' | 'generating' | 'results'
@@ -17,6 +17,7 @@ const MainWorkspace = () => {
   const [generatingStep, setGeneratingStep] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [projectName, setProjectName] = useState('')
+  const [siteFlowData, setSiteFlowData] = useState<SiteFlowData | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -125,20 +126,25 @@ const MainWorkspace = () => {
     
     setIsSaving(true)
     try {
-      // Save each generated document as a separate project
-      generatedDocs.forEach((doc) => {
-        storage.save({
-          title: `${doc.name} - ${doc.type}`,
-          type: doc.type as 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs',
-          description: appDescription.substring(0, 200) || `Generated ${doc.type} document`,
-          content: doc.content,
-        })
+      // Save all documents as a single project
+      const prdDoc = generatedDocs.find(doc => doc.type === 'PRD')
+      const documents = generatedDocs.map(doc => ({
+        type: doc.type as 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs',
+        content: doc.content,
+      }))
+      
+      storage.save({
+        title: projectName || 'Untitled Project',
+        type: 'PRD', // Default type for backward compatibility
+        description: appDescription.substring(0, 200) || `Complete project documentation`,
+        content: prdDoc?.content || generatedDocs[0]?.content || '', // Primary content for backward compatibility
+        documents: documents, // All documents stored together
+        siteFlow: siteFlowData || undefined, // Site flow data
       })
       
       setIsSaving(false)
       
       // Show success message and redirect to Projects view
-      // We'll trigger a custom event that the App component can listen to
       window.dispatchEvent(new CustomEvent('projectsUpdated'))
       
       // Reset to input view
@@ -146,8 +152,9 @@ const MainWorkspace = () => {
       setAppDescription('')
       setGeneratedDocs([])
       setProjectName('')
+      setSiteFlowData(null)
     } catch (error) {
-      console.error('Error saving projects:', error)
+      console.error('Error saving project:', error)
       setIsSaving(false)
     }
   }
@@ -235,7 +242,7 @@ const MainWorkspace = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                     </svg>
-                    Save All to Projects
+                    Save Project
                   </>
                 )}
               </button>
@@ -244,6 +251,7 @@ const MainWorkspace = () => {
                   setView('input')
                   setAppDescription('')
                   setGeneratedDocs([])
+                  setSiteFlowData(null)
                 }}
                 className="px-3 py-1.5 bg-dark-card border border-divider rounded-md text-sm text-charcoal font-medium hover:border-amber-gold hover:bg-amber-gold/5 transition-all"
               >
@@ -284,6 +292,7 @@ const MainWorkspace = () => {
             <SiteFlowVisualizer 
               appDescription={appDescription}
               prdContent={generatedDocs.find(doc => doc.type === 'PRD')?.content}
+              onSiteFlowChange={setSiteFlowData}
             />
           </div>
         </div>

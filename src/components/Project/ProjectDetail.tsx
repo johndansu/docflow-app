@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { storage } from '../../utils/storage'
 import type { Project } from '../../utils/storage'
 import DocumentViewer from '../DocumentGeneration/DocumentViewer'
+import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import { exportToPDF, exportToDOCX, exportToMarkdown } from '../../utils/exportUtils'
 
 interface ProjectDetailProps {
@@ -16,6 +17,8 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
   const [editedTitle, setEditedTitle] = useState('')
   const [editedDescription, setEditedDescription] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [activeDocumentIndex, setActiveDocumentIndex] = useState(0)
+  const [activeTab, setActiveTab] = useState<'documents' | 'siteflow'>('documents')
 
   useEffect(() => {
     const loadedProject = storage.get(projectId)
@@ -60,16 +63,21 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
   const handleExport = () => {
     if (!project) return
     
+    // Export the currently active document, or the main content if single document
+    const contentToExport = project.documents && project.documents.length > 1
+      ? project.documents[activeDocumentIndex]?.content || project.content
+      : project.content
+    
     const format = 'PDF' // Default, could be made selectable
     switch (format) {
       case 'PDF':
-        exportToPDF(project.content, project.title)
+        exportToPDF(contentToExport, project.title)
         break
       case 'DOCX':
-        exportToDOCX(project.content, project.title)
+        exportToDOCX(contentToExport, project.title)
         break
       case 'Markdown':
-        exportToMarkdown(project.content, project.title)
+        exportToMarkdown(contentToExport, project.title)
         break
     }
   }
@@ -176,12 +184,100 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
               <div>
                 <p className="text-sm text-mid-grey mb-4">{project.description}</p>
               </div>
-              <DocumentViewer
-                type={project.type}
-                name={project.title}
-                content={project.content}
-                onExport={handleExport}
-              />
+              
+              {/* Main tabs: Documents and Site Flow */}
+              {(project.documents && project.documents.length > 1) || project.siteFlow ? (
+                <div className="space-y-4">
+                  {/* Main tabs */}
+                  <div className="flex gap-2 border-b border-divider/30 pb-2">
+                    <button
+                      onClick={() => setActiveTab('documents')}
+                      className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${
+                        activeTab === 'documents'
+                          ? 'bg-dark-surface text-charcoal border-b-2 border-amber-gold'
+                          : 'text-mid-grey hover:text-charcoal hover:bg-dark-surface/50'
+                      }`}
+                    >
+                      Documents
+                    </button>
+                    {project.siteFlow && (
+                      <button
+                        onClick={() => setActiveTab('siteflow')}
+                        className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all ${
+                          activeTab === 'siteflow'
+                            ? 'bg-dark-surface text-charcoal border-b-2 border-amber-gold'
+                            : 'text-mid-grey hover:text-charcoal hover:bg-dark-surface/50'
+                        }`}
+                      >
+                        Site Flow
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Documents tab content */}
+                  {activeTab === 'documents' && (
+                    <>
+                      {project.documents && project.documents.length > 1 ? (
+                        <div className="space-y-4">
+                          {/* Document type tabs */}
+                          <div className="flex gap-2 border-b border-divider/20 pb-2 overflow-x-auto">
+                            {project.documents.map((doc, index) => (
+                              <button
+                                key={index}
+                                onClick={() => setActiveDocumentIndex(index)}
+                                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all whitespace-nowrap ${
+                                  activeDocumentIndex === index
+                                    ? 'bg-dark-surface text-charcoal border-b-2 border-blue-400'
+                                    : 'text-mid-grey hover:text-charcoal hover:bg-dark-surface/50'
+                                }`}
+                              >
+                                {doc.type}
+                              </button>
+                            ))}
+                          </div>
+                          
+                          {/* Active document viewer */}
+                          {project.documents[activeDocumentIndex] && (
+                            <DocumentViewer
+                              type={project.documents[activeDocumentIndex].type}
+                              name={project.title}
+                              content={project.documents[activeDocumentIndex].content}
+                              onExport={() => {
+                                handleExport()
+                              }}
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <DocumentViewer
+                          type={project.type}
+                          name={project.title}
+                          content={project.content}
+                          onExport={handleExport}
+                        />
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Site Flow tab content */}
+                  {activeTab === 'siteflow' && project.siteFlow && (
+                    <div className="bg-dark-card/50 rounded-lg border border-divider/30 overflow-hidden">
+                      <SiteFlowVisualizer 
+                        appDescription={project.description}
+                        prdContent={project.documents?.find(doc => doc.type === 'PRD')?.content || project.content}
+                        initialSiteFlow={project.siteFlow}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <DocumentViewer
+                  type={project.type}
+                  name={project.title}
+                  content={project.content}
+                  onExport={handleExport}
+                />
+              )}
             </div>
           )}
         </div>

@@ -1,9 +1,32 @@
+export type ProjectDocument = {
+  type: 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs'
+  content: string
+}
+
+export type SiteFlowData = {
+  nodes: Array<{
+    id: string
+    name: string
+    description: string
+    x: number
+    y: number
+    isParent?: boolean
+    level?: number
+  }>
+  connections: Array<{
+    from: string
+    to: string
+  }>
+}
+
 export type Project = {
   id: string
   title: string
-  type: 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs'
+  type: 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs' // Keep for backward compatibility
   description: string
-  content: string
+  content: string // Keep for backward compatibility - will contain PRD if multiple docs exist
+  documents?: ProjectDocument[] // New: array of all documents
+  siteFlow?: SiteFlowData // New: site flow data
   createdAt: string
   updatedAt: string
 }
@@ -35,6 +58,8 @@ export const storage = {
       id: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
+      // Ensure documents array is included if provided
+      documents: project.documents || undefined,
     }
     
     projects.push(newProject)
