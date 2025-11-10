@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import Header from './components/Layout/Header'
-import Footer from './components/Layout/Footer'
 import Sidebar from './components/Layout/Sidebar'
 import MainWorkspace from './components/Workspace/MainWorkspace'
 import Dashboard from './components/Dashboard/Dashboard'

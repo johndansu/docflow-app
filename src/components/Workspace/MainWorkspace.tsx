@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import DocumentViewer from '../DocumentGeneration/DocumentViewer'
 import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
+import { storage } from '../../utils/storage'
 
 type View = 'input' | 'generating' | 'results'
 
@@ -13,6 +14,8 @@ const MainWorkspace = () => {
   const [exportContent, setExportContent] = useState<{ content: string; filename: string } | null>(null)
   const [generationProgress, setGenerationProgress] = useState(0)
   const [generatingStep, setGeneratingStep] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [projectName, setProjectName] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -55,13 +58,14 @@ const MainWorkspace = () => {
     }, 150)
     
     setTimeout(() => {
-      const projectName = appDescription.split('\n')[0].substring(0, 50) || 'My Project'
+      const name = appDescription.split('\n')[0].substring(0, 50) || 'My Project'
+      setProjectName(name)
       
       const docs = [
         {
           type: 'PRD',
-          name: projectName,
-          content: `# Product Requirements Document: ${projectName}
+          name: name,
+          content: `# Product Requirements Document: ${name}
 
 ## 1. Overview
 ${appDescription}
@@ -101,8 +105,8 @@ Based on your description, this product addresses the need for [problem statemen
         },
         {
           type: 'Design Prompt',
-          name: projectName,
-          content: `# Design Prompt: ${projectName}
+          name: name,
+          content: `# Design Prompt: ${name}
 
 ## Project Description
 ${appDescription}
@@ -154,8 +158,8 @@ The design should:
         },
         {
           type: 'User Stories',
-          name: projectName,
-          content: `# User Stories: ${projectName}
+          name: name,
+          content: `# User Stories: ${name}
 
 ## Project Overview
 ${appDescription}
@@ -199,6 +203,38 @@ ${appDescription}
   const handleExport = (content: string, filename: string) => {
     setExportContent({ content, filename })
     setShowExport(true)
+  }
+
+  const handleSaveAllProjects = async () => {
+    if (generatedDocs.length === 0) return
+    
+    setIsSaving(true)
+    try {
+      // Save each generated document as a separate project
+      generatedDocs.forEach((doc) => {
+        storage.save({
+          title: `${doc.name} - ${doc.type}`,
+          type: doc.type as 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs',
+          description: appDescription.substring(0, 200) || `Generated ${doc.type} document`,
+          content: doc.content,
+        })
+      })
+      
+      setIsSaving(false)
+      
+      // Show success message and redirect to Projects view
+      // We'll trigger a custom event that the App component can listen to
+      window.dispatchEvent(new CustomEvent('projectsUpdated'))
+      
+      // Reset to input view
+      setView('input')
+      setAppDescription('')
+      setGeneratedDocs([])
+      setProjectName('')
+    } catch (error) {
+      console.error('Error saving projects:', error)
+      setIsSaving(false)
+    }
   }
 
   if (view === 'generating') {
@@ -265,16 +301,40 @@ ${appDescription}
                 Everything you need to start building
               </p>
             </div>
-            <button
-              onClick={() => {
-                setView('input')
-                setAppDescription('')
-                setGeneratedDocs([])
-              }}
-              className="px-3 py-1.5 bg-dark-card border border-divider rounded-md text-sm text-charcoal font-medium hover:border-amber-gold hover:bg-amber-gold/5 transition-all"
-            >
-              New Document
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSaveAllProjects}
+                disabled={isSaving}
+                className="px-3 py-1.5 bg-amber-gold hover:bg-amber-gold/90 text-white rounded-md text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    Save All to Projects
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setView('input')
+                  setAppDescription('')
+                  setGeneratedDocs([])
+                }}
+                className="px-3 py-1.5 bg-dark-card border border-divider rounded-md text-sm text-charcoal font-medium hover:border-amber-gold hover:bg-amber-gold/5 transition-all"
+              >
+                New Document
+              </button>
+            </div>
           </div>
         </div>
 

@@ -1,20 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
 import ExportModal from '../Export/ExportModal'
+import { storage } from '../../utils/storage'
 
 type DocumentType = 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs'
 
 interface DocumentGeneratorProps {
   onClose: () => void
   isStandalone?: boolean
+  onProjectCreated?: () => void
 }
 
-const DocumentGenerator = ({ onClose, isStandalone = false }: DocumentGeneratorProps) => {
+const DocumentGenerator = ({ onClose, isStandalone = false, onProjectCreated }: DocumentGeneratorProps) => {
   const [documentType, setDocumentType] = useState<DocumentType | null>(null)
   const [input, setInput] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedContent, setGeneratedContent] = useState<string | null>(null)
   const [showExport, setShowExport] = useState(false)
   const [projectName, setProjectName] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -36,6 +39,30 @@ const DocumentGenerator = ({ onClose, isStandalone = false }: DocumentGeneratorP
       setGeneratedContent(mockContent)
       setIsGenerating(false)
     }, 2000)
+  }
+
+  const handleSaveProject = () => {
+    if (!generatedContent || !documentType || !projectName) return
+    
+    setIsSaving(true)
+    try {
+      storage.save({
+        title: projectName,
+        type: documentType,
+        description: input.substring(0, 200) || `Generated ${documentType} document`,
+        content: generatedContent,
+      })
+      
+      if (onProjectCreated) {
+        onProjectCreated()
+      }
+      
+      setIsSaving(false)
+      onClose()
+    } catch (error) {
+      console.error('Error saving project:', error)
+      setIsSaving(false)
+    }
   }
 
   const generateMockContent = (type: DocumentType, name: string, desc: string): string => {
@@ -182,8 +209,15 @@ ${desc}
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-dark-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-divider/50">
             <div className="p-5 border-b border-divider/50 flex items-center justify-between bg-dark-surface/30">
-              <h2 className="text-2xl font-heading font-bold text-charcoal">{documentType}: {projectName}</h2>
+              <h2 className="text-lg font-heading font-semibold text-charcoal">{documentType}: {projectName}</h2>
               <div className="flex gap-2">
+                <button 
+                  onClick={handleSaveProject}
+                  disabled={isSaving}
+                  className="px-3.5 py-1.5 bg-amber-gold hover:bg-amber-gold/90 text-white rounded-md text-sm font-medium transition-all shadow-sm disabled:opacity-50"
+                >
+                  {isSaving ? 'Saving...' : 'Save Project'}
+                </button>
                 <button onClick={() => setShowExport(true)} className="btn-primary">
                   Export
                 </button>
