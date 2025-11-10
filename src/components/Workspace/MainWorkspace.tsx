@@ -3,6 +3,7 @@ import DocumentViewer from '../DocumentGeneration/DocumentViewer'
 import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
 import { storage } from '../../utils/storage'
+import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories } from '../../utils/contentGenerator'
 
 type View = 'input' | 'generating' | 'results'
 
@@ -45,149 +46,55 @@ const MainWorkspace = () => {
         setGeneratingStep(steps[stepIndex])
         stepIndex++
       }
-    }, 400)
+    }, 800)
     
     const progressInterval = setInterval(() => {
       setGenerationProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(progressInterval)
-          return 95
+        if (prev >= 90) {
+          return 90
         }
-        return prev + Math.random() * 8 + 2
+        return prev + Math.random() * 5 + 2
       })
-    }, 150)
+    }, 200)
     
-    setTimeout(() => {
-      const name = appDescription.split('\n')[0].substring(0, 50) || 'My Project'
-      setProjectName(name)
+    try {
+      const info = extractInfo(appDescription)
+      setProjectName(info.projectName)
+      
+      // Generate documents sequentially with progress updates
+      setGeneratingStep('Generating PRD...')
+      setGenerationProgress(20)
+      const prdContent = await generatePRD(info, appDescription)
+      
+      setGeneratingStep('Creating design brief...')
+      setGenerationProgress(50)
+      const designContent = await generateDesignPrompt(info, appDescription)
+      
+      setGeneratingStep('Writing user stories...')
+      setGenerationProgress(80)
+      const storiesContent = await generateUserStories(info, appDescription)
+      
+      clearInterval(progressInterval)
+      clearInterval(stepInterval)
       
       const docs = [
         {
           type: 'PRD',
-          name: name,
-          content: `# Product Requirements Document: ${name}
-
-## 1. Overview
-${appDescription}
-
-## 2. Problem Statement
-Based on your description, this product addresses the need for [problem statement extracted from your description].
-
-## 3. Objectives
-- Deliver a solution that meets user needs efficiently
-- Provide an intuitive and engaging user experience
-- Ensure scalability and maintainability
-
-## 4. Target Users
-- Primary users: [Based on your description]
-- Secondary users: [Based on your description]
-
-## 5. Key Features
-- Core feature 1: [Extracted from description]
-- Core feature 2: [Extracted from description]
-- Core feature 3: [Extracted from description]
-
-## 6. User Flow
-1. User lands on homepage
-2. [Flow step based on description]
-3. [Flow step based on description]
-4. [Flow step based on description]
-
-## 7. Success Metrics
-- User engagement rate
-- Feature adoption rate
-- User satisfaction score
-
-## 8. Technical Requirements
-- Frontend: Modern web framework
-- Backend: Scalable API architecture
-- Database: [To be defined]`
+          name: info.projectName,
+          content: prdContent
         },
         {
           type: 'Design Prompt',
-          name: name,
-          content: `# Design Prompt: ${name}
-
-## Project Description
-${appDescription}
-
-## Design Requirements
-
-### Visual Style
-Create a design that is:
-- Modern and professional
-- Clean and intuitive
-- Accessible and user-friendly
-- Visually appealing without being overwhelming
-
-### Key Design Elements to Consider
-- Color scheme that reflects the brand and purpose
-- Typography that ensures readability and hierarchy
-- Layout that guides users naturally through the interface
-- Interactive elements that provide clear feedback
-- Responsive design that works across all devices
-
-### User Experience Goals
-- Make it easy for users to understand and navigate
-- Ensure key actions are clear and accessible
-- Create a sense of trust and professionalism
-- Minimize cognitive load
-- Provide visual feedback for user interactions
-
-### Specific Design Challenges
-Based on the project description, consider:
-- How to present [main features from description] clearly
-- How to guide users through [key user flows]
-- How to make [complex features] feel simple and approachable
-- How to create visual hierarchy that emphasizes what matters most
-
-### Design Deliverables
-- Wireframes for key screens
-- High-fidelity mockups
-- Design system/component library
-- Interactive prototypes
-- Style guide with colors, typography, and spacing
-
-### Success Criteria
-The design should:
-- Be intuitive for first-time users
-- Support the core functionality effectively
-- Maintain consistency across all screens
-- Meet accessibility standards (WCAG 2.1 AA)
-- Be implementable within technical constraints`
+          name: info.projectName,
+          content: designContent
         },
         {
           type: 'User Stories',
-          name: name,
-          content: `# User Stories: ${name}
-
-## Project Overview
-${appDescription}
-
-## User Stories
-
-### As a user, I want to [primary action] so that [benefit]
-- Acceptance criteria: Clear and actionable
-- Acceptance criteria: Measurable outcome
-- Acceptance criteria: User-focused
-
-### As a user, I want to [secondary action] so that [benefit]
-- Acceptance criteria: Intuitive flow
-- Acceptance criteria: Fast response time
-
-### As a user, I want to [tertiary action] so that [benefit]
-- Acceptance criteria: Seamless experience
-- Acceptance criteria: Error handling
-
-## Priority
-- High: Core functionality
-- Medium: Enhanced features
-- Low: Nice-to-have features`
+          name: info.projectName,
+          content: storiesContent
         }
       ]
       
-      clearInterval(progressInterval)
-      clearInterval(stepInterval)
       setGenerationProgress(100)
       setGeneratingStep('Complete!')
       
@@ -197,7 +104,15 @@ ${appDescription}
         setGenerationProgress(0)
         setGeneratingStep('')
       }, 500)
-    }, 3000)
+    } catch (error) {
+      clearInterval(progressInterval)
+      clearInterval(stepInterval)
+      console.error('Generation error:', error)
+      alert('Failed to generate content. Please check your API key configuration or try again.')
+      setView('input')
+      setGenerationProgress(0)
+      setGeneratingStep('')
+    }
   }
 
   const handleExport = (content: string, filename: string) => {
@@ -366,7 +281,10 @@ ${appDescription}
             </div>
           </div>
           <div className="p-5">
-            <SiteFlowVisualizer appDescription={appDescription} />
+            <SiteFlowVisualizer 
+              appDescription={appDescription}
+              prdContent={generatedDocs.find(doc => doc.type === 'PRD')?.content}
+            />
           </div>
         </div>
 

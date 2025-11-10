@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import ExportModal from '../Export/ExportModal'
+import MarkdownRenderer from './MarkdownRenderer'
 import { storage } from '../../utils/storage'
+import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories, generateSpecs } from '../../utils/contentGenerator'
 
 type DocumentType = 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs'
 
@@ -30,15 +32,33 @@ const DocumentGenerator = ({ onClose, isStandalone = false, onProjectCreated }: 
     if (!input.trim() || !documentType) return
 
     setIsGenerating(true)
-    const lines = input.split('\n').filter(l => l.trim())
-    const name = lines[0] || 'Untitled Project'
-    setProjectName(name)
+    const info = extractInfo(input)
+    setProjectName(info.projectName)
     
-    setTimeout(() => {
-      const mockContent = generateMockContent(documentType, name, input)
-      setGeneratedContent(mockContent)
+    try {
+      let content = ''
+      switch (documentType) {
+        case 'PRD':
+          content = await generatePRD(info, input)
+          break
+        case 'Design Prompt':
+          content = await generateDesignPrompt(info, input)
+          break
+        case 'User Stories':
+          content = await generateUserStories(info, input)
+          break
+        case 'Specs':
+          content = await generateSpecs(info, input)
+          break
+      }
+      setGeneratedContent(content)
+    } catch (error) {
+      console.error('Generation error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Failed to generate content: ${errorMessage}\n\nCheck the browser console for details.`)
+    } finally {
       setIsGenerating(false)
-    }, 2000)
+    }
   }
 
   const handleSaveProject = () => {
@@ -65,106 +85,6 @@ const DocumentGenerator = ({ onClose, isStandalone = false, onProjectCreated }: 
     }
   }
 
-  const generateMockContent = (type: DocumentType, name: string, desc: string): string => {
-    const templates: Record<DocumentType, string> = {
-      'PRD': `# Product Requirements Document: ${name}
-
-## 1. Overview
-${desc}
-
-## 2. Problem Statement
-[AI-generated problem statement based on your description]
-
-## 3. Objectives
-- Objective 1
-- Objective 2
-- Objective 3
-
-## 4. Target Users
-- Primary users
-- Secondary users
-
-## 5. Key Features
-- Feature 1
-- Feature 2
-- Feature 3
-
-## 6. User Flow
-1. Step 1
-2. Step 2
-3. Step 3
-
-## 7. Success Metrics
-- Metric 1
-- Metric 2
-
-## 8. Technical Requirements
-- Frontend: [To be defined]
-- Backend: [To be defined]
-- Database: [To be defined]`,
-      'Design Prompt': `# Design Brief: ${name}
-
-## Project Overview
-${desc}
-
-## Visual Direction
-- Tone: [AI-generated tone]
-- Color Palette: [AI-generated palette]
-- Typography: [AI-generated typography]
-
-## Layout Structure
-- Header: [Description]
-- Main Content: [Description]
-- Footer: [Description]
-
-## User Experience Notes
-- Key interaction points
-- Accessibility considerations
-- Responsive breakpoints`,
-      'User Stories': `# User Stories: ${name}
-
-## Project Overview
-${desc}
-
-## User Stories
-
-### As a [user type], I want to [action] so that [benefit]
-- Acceptance criteria 1
-- Acceptance criteria 2
-- Acceptance criteria 3
-
-### As a [user type], I want to [action] so that [benefit]
-- Acceptance criteria 1
-- Acceptance criteria 2
-
-## Priority
-- High Priority
-- Medium Priority
-- Low Priority`,
-      'Specs': `# Technical Specifications: ${name}
-
-## Overview
-${desc}
-
-## Architecture
-- System architecture overview
-- Component breakdown
-
-## API Specifications
-- Endpoint 1
-- Endpoint 2
-
-## Database Schema
-- Table 1
-- Table 2
-
-## Performance Requirements
-- Response time
-- Throughput
-- Scalability`
-    }
-    return templates[type]
-  }
 
   if (generatedContent) {
     if (isStandalone) {
@@ -188,9 +108,7 @@ ${desc}
               </div>
             </div>
             <div className="p-12 overflow-y-auto max-h-[calc(100vh-300px)]">
-              <div className="prose prose-sm max-w-none">
-                <pre className="whitespace-pre-wrap font-body text-base text-charcoal leading-relaxed font-normal">{generatedContent}</pre>
-              </div>
+              <MarkdownRenderer content={generatedContent} />
             </div>
           </div>
           {showExport && (
@@ -229,8 +147,8 @@ ${desc}
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6">
-              <pre className="whitespace-pre-wrap font-body text-sm text-charcoal">{generatedContent}</pre>
+            <div className="flex-1 overflow-y-auto p-8">
+              <MarkdownRenderer content={generatedContent} />
             </div>
           </div>
         </div>
