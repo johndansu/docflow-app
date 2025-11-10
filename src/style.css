@@ -1,17 +1,18 @@
 @import "tailwindcss";
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600&family=Work+Sans:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @theme {
   --color-amber-gold: #D9A441;
-  --color-light-neutral: #FAFAF8;
-  --color-charcoal: #212121;
-  --color-mid-grey: #BDBDBD;
+  --color-light-neutral: #121212;
+  --color-charcoal: #E5E5E5;
+  --color-mid-grey: #9CA3AF;
   --color-deep-green: #3C6E47;
-  --color-divider: #E0E0E0;
+  --color-divider: #2A2A2A;
+  --color-dark-card: #1E1E1E;
+  --color-dark-surface: #181818;
   
-  --font-heading: 'Inter', 'Source Sans Pro', sans-serif;
-  --font-body: 'Noto Sans', 'Work Sans', sans-serif;
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
   --spacing-header: 60px;
   --spacing-sidebar: 180px;
@@ -22,38 +23,53 @@
 @layer base {
   body {
     @apply bg-light-neutral text-charcoal font-body;
-    font-size: 14px;
+    font-size: 15px;
+    line-height: 1.5;
+    letter-spacing: -0.011em;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
   
   h1, h2, h3, h4, h5, h6 {
     @apply font-heading;
+    letter-spacing: -0.025em;
+    font-weight: 600;
   }
   
   h1 {
-    @apply text-3xl font-bold;
+    @apply text-3xl;
+    line-height: 1.2;
+    font-weight: 700;
   }
   
   h2 {
-    @apply text-2xl font-bold;
+    @apply text-2xl;
+    line-height: 1.3;
+    font-weight: 600;
   }
   
   h3 {
-    @apply text-xl font-semibold;
+    @apply text-xl;
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  
+  button, input, textarea, select {
+    font-family: inherit;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white border border-divider rounded-lg p-4;
+    @apply bg-dark-card border border-divider rounded-lg p-4;
     box-shadow: var(--shadow-card);
   }
   
   .btn-primary {
-    @apply bg-amber-gold text-white px-4 py-2 rounded-md font-medium hover:brightness-110 transition-all;
+    @apply bg-amber-gold text-white px-4 py-2 rounded-lg font-medium hover:bg-amber-gold/90 transition-all shadow-md hover:shadow-lg;
   }
   
   .btn-secondary {
-    @apply border border-charcoal text-charcoal px-4 py-2 rounded-md font-medium hover:bg-charcoal hover:text-white transition-all;
+    @apply border border-divider text-charcoal px-4 py-2 rounded-lg font-medium hover:bg-dark-surface hover:border-divider transition-all;
   }
 }
 

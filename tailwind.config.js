@@ -8,15 +8,17 @@ export default {
     extend: {
       colors: {
         'amber-gold': '#D9A441',
-        'light-neutral': '#FAFAF8',
-        'charcoal': '#212121',
-        'mid-grey': '#BDBDBD',
+        'light-neutral': '#121212',
+        'charcoal': '#E5E5E5',
+        'mid-grey': '#9CA3AF',
         'deep-green': '#3C6E47',
-        'divider': '#E0E0E0',
+        'divider': '#2A2A2A',
+        'dark-card': '#1E1E1E',
+        'dark-surface': '#181818',
       },
       fontFamily: {
-        'heading': ['Inter', 'Source Sans Pro', 'sans-serif'],
-        'body': ['Noto Sans', 'Work Sans', 'sans-serif'],
+        'heading': ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        'body': ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       },
       spacing: {
         'header': '60px',

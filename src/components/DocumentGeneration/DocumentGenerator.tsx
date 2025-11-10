@@ -143,15 +143,15 @@ ${desc}
     if (isStandalone) {
       return (
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-xl shadow-lg border border-divider overflow-hidden">
-            <div className="px-8 py-6 border-b border-divider bg-light-neutral/50">
+          <div className="bg-dark-card rounded-xl shadow-lg border border-divider overflow-hidden">
+            <div className="px-8 py-6 border-b border-divider bg-dark-surface/50">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm text-mid-grey mb-1">{documentType}</div>
                   <h2 className="text-2xl font-heading font-bold text-charcoal">{projectName}</h2>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => {setGeneratedContent(null); setInput(''); setDocumentType(null)}} className="px-4 py-2 text-sm text-charcoal hover:bg-white rounded-lg transition-colors">
+                  <button onClick={() => {setGeneratedContent(null); setInput(''); setDocumentType(null)}} className="px-4 py-2 text-sm text-charcoal hover:bg-dark-surface rounded-lg transition-colors">
                     New
                   </button>
                   <button onClick={() => setShowExport(true)} className="btn-primary">
@@ -179,9 +179,9 @@ ${desc}
     
     return (
       <>
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b border-divider flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-dark-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-divider/50">
+            <div className="p-5 border-b border-divider/50 flex items-center justify-between bg-dark-surface/30">
               <h2 className="text-2xl font-heading font-bold text-charcoal">{documentType}: {projectName}</h2>
               <div className="flex gap-2">
                 <button onClick={() => setShowExport(true)} className="btn-primary">
@@ -220,17 +220,21 @@ ${desc}
               <button
                 key={type}
                 onClick={() => setDocumentType(type)}
-                className="group p-8 bg-white rounded-xl border-2 border-divider hover:border-amber-gold transition-all text-left hover:shadow-lg"
+                className="group p-5 bg-dark-card/50 hover:bg-dark-card rounded-lg border border-divider/50 hover:border-amber-gold/50 transition-all text-left hover:shadow-md"
               >
-                <div className="text-2xl mb-2 group-hover:scale-110 transition-transform">📄</div>
+                <div className="mb-3 group-hover:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-amber-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
                 <div className="text-lg font-semibold text-charcoal mb-1">{type}</div>
                 <div className="text-sm text-mid-grey">Generate structured {type.toLowerCase()}</div>
               </button>
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-lg border border-divider overflow-hidden">
-            <div className="px-8 py-6 border-b border-divider flex items-center gap-4">
+          <div className="bg-dark-card rounded-lg shadow-lg border border-divider/50 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-divider/50 flex items-center gap-2.5 bg-dark-surface/30">
               <button
                 onClick={() => setDocumentType(null)}
                 className="text-mid-grey hover:text-charcoal transition-colors"
@@ -254,7 +258,7 @@ ${desc}
                       handleGenerate()
                     }
                   }}
-                  className="w-full min-h-[300px] px-0 py-4 border-0 focus:outline-none resize-none text-lg text-charcoal placeholder:text-mid-grey/50 font-body leading-relaxed"
+                  className="w-full min-h-[300px] px-0 py-4 border-0 focus:outline-none resize-none text-sm text-charcoal placeholder:text-mid-grey/50 font-body leading-relaxed bg-transparent"
                   placeholder="Start typing... Describe your project idea, goals, users, features, or anything else that comes to mind.&#10;&#10;Press Cmd/Ctrl + Enter to generate"
                   autoFocus
                 />

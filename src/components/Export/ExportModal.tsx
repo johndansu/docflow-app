@@ -37,10 +37,10 @@ const ExportModal = ({ content, filename, onClose }: ExportModalProps) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-heading font-bold text-charcoal">Export Document</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-dark-card rounded-lg max-w-md w-full p-5 border border-divider/50 shadow-xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-heading font-semibold text-charcoal">Export Document</h2>
           <button onClick={onClose} className="text-mid-grey hover:text-charcoal">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -56,10 +56,10 @@ const ExportModal = ({ content, filename, onClose }: ExportModalProps) => {
                 <button
                   key={format}
                   onClick={() => setExportFormat(format)}
-                  className={`px-4 py-3 rounded-md border transition-all ${
+                  className={`px-3.5 py-2 rounded-md border transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-gold/50 ${
                     exportFormat === format
-                      ? 'border-amber-gold bg-amber-gold/10 text-amber-gold'
-                      : 'border-divider text-charcoal hover:border-amber-gold'
+                      ? 'border-amber-gold bg-amber-gold/15 text-amber-gold shadow-sm'
+                      : 'border-divider/50 text-charcoal hover:border-amber-gold/50 hover:bg-dark-surface/50'
                   }`}
                 >
                   {format}
@@ -74,7 +74,7 @@ const ExportModal = ({ content, filename, onClose }: ExportModalProps) => {
               type="text"
               value={filename}
               readOnly
-              className="w-full px-4 py-2 border border-divider rounded-md bg-light-neutral text-charcoal"
+              className="w-full px-3.5 py-2 border border-divider/50 rounded-md bg-dark-surface text-charcoal text-sm focus:outline-none focus:border-amber-gold/50 focus:ring-2 focus:ring-amber-gold/30 transition-colors"
             />
           </div>
 

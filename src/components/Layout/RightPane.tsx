@@ -4,7 +4,7 @@ interface RightPaneProps {
 
 const RightPane = ({ onClose }: RightPaneProps) => {
   return (
-    <aside className="w-80 bg-white border-l border-divider h-screen fixed right-0 top-header overflow-y-auto">
+    <aside className="w-80 bg-dark-card border-l border-divider h-[calc(100vh-4rem)] fixed right-0 top-16 overflow-y-auto z-40">
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-heading font-semibold text-lg">Context</h3>
@@ -25,7 +25,7 @@ const RightPane = ({ onClose }: RightPaneProps) => {
           <div>
             <h4 className="font-medium text-sm text-mid-grey mb-2">Document Notes</h4>
             <textarea
-              className="w-full p-2 border border-divider rounded-md text-sm resize-none"
+              className="w-full p-2 border border-divider rounded-md text-sm resize-none bg-dark-surface text-charcoal"
               rows={4}
               placeholder="Add notes here..."
             />

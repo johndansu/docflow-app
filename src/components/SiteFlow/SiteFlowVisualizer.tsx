@@ -340,11 +340,11 @@ const SiteFlowVisualizer = ({ appDescription = '' }: SiteFlowVisualizerProps) =>
         className="flex-1 relative overflow-hidden rounded-lg"
         style={{
           backgroundImage: `
-            linear-gradient(to right, #E0E0E0 1px, transparent 1px),
-            linear-gradient(to bottom, #E0E0E0 1px, transparent 1px)
+            linear-gradient(to right, #2A2A2A 1px, transparent 1px),
+            linear-gradient(to bottom, #2A2A2A 1px, transparent 1px)
           `,
           backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
-          backgroundColor: '#FAFAF8',
+          backgroundColor: '#0F0F0F',
         }}
         onClick={() => {
           if (!contextMenu) setSelectedNodes(new Set())
@@ -419,13 +419,13 @@ const SiteFlowVisualizer = ({ appDescription = '' }: SiteFlowVisualizerProps) =>
         {/* Context Menu */}
         {contextMenu && (
           <div
-            className="fixed bg-white border border-divider rounded-lg shadow-lg z-50"
+            className="fixed bg-dark-card border border-divider rounded-lg shadow-lg z-50"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => addChildPage(contextMenu.nodeId)}
-              className="block w-full text-left px-4 py-2 hover:bg-light-neutral text-sm text-charcoal"
+              className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
             >
               Add Child Page
             </button>
@@ -437,7 +437,7 @@ const SiteFlowVisualizer = ({ appDescription = '' }: SiteFlowVisualizerProps) =>
             </button>
             <button
               onClick={() => setContextMenu(null)}
-              className="block w-full text-left px-4 py-2 hover:bg-light-neutral text-sm text-charcoal"
+              className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
             >
               Cancel
             </button>
