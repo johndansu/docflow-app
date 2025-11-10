@@ -74,6 +74,14 @@ const Dashboard = () => {
     setProjects(allProjects)
   }
 
+  const handleClearAll = () => {
+    if (window.confirm('Are you sure you want to delete all projects? This action cannot be undone.')) {
+      storage.clear()
+      loadProjects()
+      window.dispatchEvent(new CustomEvent('projectsUpdated'))
+    }
+  }
+
   const handleProjectCreated = () => {
     loadProjects()
     setShowGenerator(false)
@@ -139,16 +147,30 @@ const Dashboard = () => {
                 {searchQuery && ` matching "${searchQuery}"`}
               </p>
             </div>
-            <button 
-              onClick={() => setShowGenerator(true)} 
-              className="px-3.5 py-2 bg-amber-gold hover:bg-amber-gold/90 text-white rounded-md text-sm font-medium transition-all shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-gold/50 flex items-center gap-2"
-              title="New project (⌘N)"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New project
-            </button>
+            <div className="flex items-center gap-2">
+              {projects.length > 0 && (
+                <button 
+                  onClick={handleClearAll}
+                  className="px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-md text-sm font-medium transition-all border border-red-500/20 hover:border-red-500/40 focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-2"
+                  title="Clear all projects"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Clear All
+                </button>
+              )}
+              <button 
+                onClick={() => setShowGenerator(true)} 
+                className="px-3.5 py-2 bg-amber-gold hover:bg-amber-gold/90 text-white rounded-md text-sm font-medium transition-all shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-gold/50 flex items-center gap-2"
+                title="New project (⌘N)"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New project
+              </button>
+            </div>
           </div>
 
           {projects.length > 0 && (

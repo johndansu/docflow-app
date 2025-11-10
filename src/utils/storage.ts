@@ -93,6 +93,10 @@ export const storage = {
     return true
   },
 
+  clear(): void {
+    localStorage.removeItem(STORAGE_KEY)
+  },
+
   formatDate(dateString: string): string {
     const date = new Date(dateString)
     const now = new Date()
