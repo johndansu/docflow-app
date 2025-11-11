@@ -779,7 +779,9 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
     // Natural spacing constants
     const level1Radius = Math.min(availableWidth, availableHeight) * 0.25 // 25% of canvas
     const level2Radius = Math.min(availableWidth, availableHeight) * 0.15 // 15% of canvas
-    const minNodeDistance = 250 // Minimum distance between nodes
+    const minNodeDistance = 300 // Increased minimum distance between nodes to prevent overlaps
+    const nodeWidth = 200 // Approximate node width
+    const nodeHeight = 80 // Approximate node height
     
     // First pass: position all nodes
     const newNodes = nodes.map(node => {
@@ -854,9 +856,12 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
       return node // Keep fallback position
     })
     
-    // Apply force-directed spacing to prevent overlaps
+    // Apply force-directed spacing to prevent overlaps - enhanced algorithm
     const finalNodes = [...finalPositionedNodes]
-    for (let i = 0; i < 10; i++) { // Iterate a few times for natural spacing
+    const iterations = 20 // More iterations for better spacing
+    const damping = 0.3 // Damping factor for smoother movement
+    
+    for (let i = 0; i < iterations; i++) {
       finalNodes.forEach((node, idx) => {
         let fx = 0, fy = 0
         
@@ -865,21 +870,58 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           
           const dx = otherNode.x - node.x
           const dy = otherNode.y - node.y
-          const distance = Math.sqrt(dx * dx + dy * dy) || 1
+          const distance = Math.sqrt(dx * dx + dy * dy) || 0.1
           
-          // Repulsion force - push nodes apart
-          if (distance < minNodeDistance) {
-            const force = (minNodeDistance - distance) / minNodeDistance
-            fx -= (dx / distance) * force * 20
-            fy -= (dy / distance) * force * 20
+          // Calculate actual minimum distance needed (considering node dimensions)
+          const actualMinDistance = minNodeDistance + Math.max(nodeWidth, nodeHeight) / 2
+          
+          // Stronger repulsion force - push nodes apart more aggressively
+          if (distance < actualMinDistance) {
+            const overlap = actualMinDistance - distance
+            const force = (overlap / actualMinDistance) * 50 // Stronger force
+            fx -= (dx / distance) * force
+            fy -= (dy / distance) * force
+          } else if (distance < actualMinDistance * 1.5) {
+            // Gentle repulsion even when close but not overlapping
+            const force = ((actualMinDistance * 1.5 - distance) / actualMinDistance) * 10
+            fx -= (dx / distance) * force
+            fy -= (dy / distance) * force
           }
         })
         
-        // Apply forces with damping
-        node.x = Math.max(padding, Math.min(availableWidth - padding, node.x + fx * 0.1))
-        node.y = Math.max(padding, Math.min(availableHeight - padding, node.y + fy * 0.1))
+        // Apply forces with damping and keep within bounds
+        const newX = node.x + fx * damping
+        const newY = node.y + fy * damping
+        
+        node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, newX))
+        node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, newY))
       })
     }
+    
+    // Final pass: check for any remaining overlaps and fix them
+    finalNodes.forEach((node, idx) => {
+      finalNodes.forEach((otherNode, otherIdx) => {
+        if (idx === otherIdx) return
+        
+        const dx = otherNode.x - node.x
+        const dy = otherNode.y - node.y
+        const distance = Math.sqrt(dx * dx + dy * dy) || 0.1
+        const actualMinDistance = minNodeDistance + Math.max(nodeWidth, nodeHeight) / 2
+        
+        if (distance < actualMinDistance) {
+          // Push nodes apart directly
+          const pushDistance = (actualMinDistance - distance) / 2
+          const pushX = (dx / distance) * pushDistance
+          const pushY = (dy / distance) * pushDistance
+          
+          node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, node.x - pushX))
+          node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, node.y - pushY))
+          
+          otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, otherNode.x + pushX))
+          otherNode.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, otherNode.y + pushY))
+        }
+      })
+    })
     
     setNodes(finalNodes)
     

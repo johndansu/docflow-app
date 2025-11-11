@@ -332,12 +332,13 @@ const MainWorkspace = () => {
                 value={appDescription}
                 onChange={(e) => setAppDescription(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  if (e.key === 'Enter' && !e.shiftKey && appDescription.trim()) {
+                    e.preventDefault()
                     handleGenerate()
                   }
                 }}
-            className="w-full min-h-[350px] px-0 py-0 border-0 focus:outline-none resize-none text-sm text-charcoal placeholder:text-mid-grey/50 font-body leading-relaxed bg-transparent focus:ring-0"
-            placeholder="Describe your project idea, features, target users, and goals..."
+            className="w-full min-h-[200px] px-0 py-0 border-0 focus:outline-none resize-none text-sm text-charcoal placeholder:text-mid-grey/50 font-body leading-relaxed bg-transparent focus:ring-0"
+            placeholder="Describe your project idea, features, target users, and goals... (Press Enter to generate)"
                 autoFocus
               />
             </div>
@@ -368,7 +369,7 @@ const MainWorkspace = () => {
 
       <div className="mt-3 text-center">
         <p className="text-xs text-mid-grey">
-          Press <kbd className="px-1.5 py-0.5 bg-dark-card border border-divider/50 rounded text-xs">⌘</kbd> + <kbd className="px-1.5 py-0.5 bg-dark-card border border-divider/50 rounded text-xs">Enter</kbd> to generate
+          Press <kbd className="px-1.5 py-0.5 bg-dark-card border border-divider/50 rounded text-xs">Enter</kbd> to generate • <kbd className="px-1.5 py-0.5 bg-dark-card border border-divider/50 rounded text-xs">Shift</kbd> + <kbd className="px-1.5 py-0.5 bg-dark-card border border-divider/50 rounded text-xs">Enter</kbd> for new line
         </p>
       </div>
     </div>
