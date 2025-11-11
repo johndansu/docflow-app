@@ -155,10 +155,10 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
   const nodes: SiteFlowNode[] = []
   const connections: SiteFlowConnection[] = []
   
-  const centerX = 400
-  const centerY = 200
-  const levelSpacing = 300
-  const nodeSpacing = 250
+  const centerX = 600
+  const centerY = 300
+  const levelSpacing = 600 // Much larger spacing between levels
+  const nodeSpacing = 500 // Much larger spacing between nodes at same level
   
   // Create a map of page names to IDs
   const pageNameToId = new Map<string, string>()
@@ -267,8 +267,8 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
   const nodes: SiteFlowNode[] = []
   const connections: SiteFlowConnection[] = []
   
-  const centerX = 400
-  const centerY = 200
+  const centerX = 600
+  const centerY = 300
   
   // Home page
   const homeNode: SiteFlowNode = {
@@ -290,7 +290,7 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
       id: nodeId.toString(),
       name: 'Login',
       description: 'User authentication',
-      x: centerX - 300,
+      x: centerX - 400,
       y: centerY,
       level: 1,
     })
@@ -303,7 +303,7 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
       id: nodeId.toString(),
       name: 'Dashboard',
       description: 'User dashboard',
-      x: centerX + 300,
+      x: centerX + 400,
       y: centerY,
       isParent: true,
       level: 1,
@@ -318,7 +318,7 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
       name: 'Products',
       description: 'Product listing',
       x: centerX,
-      y: centerY - 200,
+      y: centerY - 300,
       isParent: true,
       level: 1,
     })

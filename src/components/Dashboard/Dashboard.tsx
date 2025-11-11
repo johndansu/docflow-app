@@ -5,7 +5,11 @@ import { storage } from '../../utils/storage'
 import { supabaseStorage } from '../../utils/supabaseStorage'
 import type { Project } from '../../utils/storage'
 
-const Dashboard = () => {
+interface DashboardProps {
+  onNavigateToNew?: () => void
+}
+
+const Dashboard = ({ onNavigateToNew }: DashboardProps = {}) => {
   const [showGenerator, setShowGenerator] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
@@ -57,7 +61,11 @@ const Dashboard = () => {
       // Cmd/Ctrl + N: New project
       if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
         e.preventDefault()
-        setShowGenerator(true)
+        if (onNavigateToNew) {
+          onNavigateToNew()
+        } else {
+          setShowGenerator(true)
+        }
       }
       
       // Escape: Close modals
@@ -158,7 +166,13 @@ const Dashboard = () => {
             Generate structured documentation and visualize your project flow in one place
           </p>
           <button 
-            onClick={() => setShowGenerator(true)} 
+            onClick={() => {
+              if (onNavigateToNew) {
+                onNavigateToNew()
+              } else {
+                setShowGenerator(true)
+              }
+            }}
             className="px-5 py-2.5 bg-amber-gold hover:bg-amber-gold/90 text-white rounded-md text-sm font-medium transition-all shadow-md hover:shadow-lg"
           >
             Create your first project
@@ -188,7 +202,13 @@ const Dashboard = () => {
                 </button>
               )}
             <button 
-              onClick={() => setShowGenerator(true)} 
+              onClick={() => {
+                if (onNavigateToNew) {
+                  onNavigateToNew()
+                } else {
+                  setShowGenerator(true)
+                }
+              }} 
               className="px-3.5 py-2 bg-amber-gold hover:bg-amber-gold/90 text-white rounded-md text-sm font-medium transition-all shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-gold/50 flex items-center gap-2"
               title="New project (⌘N)"
             >

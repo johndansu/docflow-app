@@ -28,7 +28,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
   const [nodes, setNodes] = useState<Node[]>(initialSiteFlow?.nodes || [])
   const [connections, setConnections] = useState<Connection[]>(initialSiteFlow?.connections || [])
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(0.5) // Default to 50% zoom
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
@@ -248,6 +248,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
             return newHistory.slice(-50)
           })
           setHistoryIndex(prev => Math.min(prev + 1, 49))
+          // Auto-fit after setting nodes
+          setTimeout(() => centerView(), 100)
         }, 0)
         return
       }
@@ -280,6 +282,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
             return newHistory.slice(-50)
           })
           setHistoryIndex(prev => Math.min(prev + 1, 49))
+          // Auto-fit after setting nodes
+          setTimeout(() => centerView(), 100)
         }, 0)
         return
       }
@@ -298,9 +302,10 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
     const generatedPages: Node[] = []
     const generatedConnections: Connection[] = []
 
-    // Center starting point
-    const centerX = 400
-    const centerY = 200
+    // Center starting point - nodes will be repositioned to visible space
+    // Use large initial spacing so they spread out before repositioning
+    const centerX = 1000
+    const centerY = 1000
 
     // Always create Home page - center
     const homeNode: Node = {
@@ -324,7 +329,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         id: nodeId.toString(),
         name: 'Login',
         description: 'User authentication',
-        x: centerX - 300,
+        x: centerX - 400,
         y: centerY,
         level: 1,
       })
@@ -337,7 +342,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         id: nodeId.toString(),
         name: 'Dashboard',
         description: 'User dashboard',
-        x: centerX + 300,
+        x: centerX + 400,
         y: centerY,
         isParent: true,
         level: 1,
@@ -352,8 +357,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           id: nodeId.toString(),
           name: 'Profile',
           description: 'User profile',
-          x: centerX + 300,
-          y: centerY + 200,
+          x: centerX + 400,
+          y: centerY + 300,
           level: 2,
         })
         generatedConnections.push({ from: dashboardId, to: nodeId.toString() })
@@ -365,8 +370,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           id: nodeId.toString(),
           name: 'Settings',
           description: 'User settings',
-          x: centerX + 500,
-          y: centerY + 200,
+          x: centerX + 600,
+          y: centerY + 300,
           level: 2,
         })
         generatedConnections.push({ from: dashboardId, to: nodeId.toString() })
@@ -380,7 +385,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         name: 'Products',
         description: 'Product listing',
         x: centerX,
-        y: centerY - 200,
+        y: centerY - 300,
         isParent: true,
         level: 1,
       })
@@ -393,8 +398,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         id: nodeId.toString(),
         name: 'Product Detail',
         description: 'Individual product',
-        x: centerX + 200,
-        y: centerY - 200,
+        x: centerX + 300,
+        y: centerY - 300,
         level: 2,
       })
       generatedConnections.push({ from: productsId, to: nodeId.toString() })
@@ -407,7 +412,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           name: 'Cart',
           description: 'Shopping cart',
           x: centerX,
-          y: centerY - 100,
+          y: centerY - 150,
           level: 2,
         })
         generatedConnections.push({ from: productsId, to: nodeId.toString() })
@@ -420,8 +425,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         id: nodeId.toString(),
         name: 'Blog',
         description: 'Blog listing',
-        x: centerX - 300,
-        y: centerY - 200,
+        x: centerX - 400,
+        y: centerY - 300,
         level: 1,
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
@@ -433,8 +438,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         id: nodeId.toString(),
         name: 'Blog Post',
         description: 'Article detail',
-        x: centerX - 300,
-        y: centerY - 100,
+        x: centerX - 400,
+        y: centerY - 150,
         level: 2,
       })
       generatedConnections.push({ from: blogId, to: nodeId.toString() })
@@ -446,8 +451,8 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         id: nodeId.toString(),
         name: 'About',
         description: 'About page',
-        x: centerX - 300,
-        y: centerY + 200,
+        x: centerX - 400,
+        y: centerY + 300,
         level: 1,
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
@@ -460,7 +465,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
         name: 'Contact',
         description: 'Contact page',
         x: centerX,
-        y: centerY + 200,
+        y: centerY + 300,
         level: 1,
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
@@ -495,7 +500,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
       if (pageNames.length > 0) {
         pageNames.slice(0, 4).forEach((name, idx) => {
           const angle = (idx / pageNames.length) * Math.PI * 2
-          const radius = 250
+          const radius = 400 // Increased radius for better spacing
           level1Nodes.push({
             id: nodeId.toString(),
             name: name.charAt(0).toUpperCase() + name.slice(1),
@@ -511,9 +516,9 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
       } else {
         // Default pages if nothing found
         const defaultPages = [
-          { name: 'About', x: centerX - 250, y: centerY },
-          { name: 'Contact', x: centerX + 250, y: centerY },
-          { name: 'Services', x: centerX, y: centerY - 200 },
+          { name: 'About', x: centerX - 400, y: centerY },
+          { name: 'Contact', x: centerX + 400, y: centerY },
+          { name: 'Services', x: centerX, y: centerY - 300 },
         ]
         defaultPages.forEach((page, idx) => {
           level1Nodes.push({
@@ -531,37 +536,15 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
       }
     }
 
-    // Auto-center the view - use actual canvas dimensions if available
-    const allX = generatedPages.map(n => n.x)
-    const allY = generatedPages.map(n => n.y)
-    const minX = Math.min(...allX)
-    const maxX = Math.max(...allX)
-    const minY = Math.min(...allY)
-    const maxY = Math.max(...allY)
-    
-    // Center nodes in a reasonable viewport (assuming ~800x600 canvas)
-    const canvasWidth = 800
-    const canvasHeight = 600
-    const nodesCenterX = (minX + maxX) / 2
-    const nodesCenterY = (minY + maxY) / 2
-    const offsetX = canvasWidth / 2 - nodesCenterX
-    const offsetY = canvasHeight / 2 - nodesCenterY
-
-    const adjustedNodes = generatedPages.map(node => ({
-      ...node,
-      x: node.x + offsetX,
-      y: node.y + offsetY,
-    }))
-
-    setNodes(adjustedNodes)
+    setNodes(generatedPages)
     setConnections(generatedConnections)
     
     // Initialize history with generated flow
-    const initialState: SiteFlowData = { nodes: adjustedNodes, connections: generatedConnections }
+    const initialState: SiteFlowData = { nodes: generatedPages, connections: generatedConnections }
     setHistory([initialState])
     setHistoryIndex(0)
     
-    // Auto-center view after a short delay to ensure canvas is rendered
+    // Auto-fit and center view after a short delay to ensure canvas is rendered
     setTimeout(() => {
       centerView()
     }, 200)
@@ -762,30 +745,166 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
   }
 
   const centerView = () => {
-    if (nodes.length === 0) return
+    if (nodes.length === 0 || !canvasRef.current) return
     
-    const allX = nodes.map(n => n.x)
-    const allY = nodes.map(n => n.y)
-    const minX = Math.min(...allX)
-    const maxX = Math.max(...allX)
-    const minY = Math.min(...allY)
-    const maxY = Math.max(...allY)
-    const centerX = (minX + maxX) / 2
-    const centerY = (minY + maxY) / 2
+    const rect = canvasRef.current.getBoundingClientRect()
+    const canvasWidth = rect.width
+    const canvasHeight = rect.height
     
-    if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect()
-      setPanOffset({
-        x: rect.width / 2 - centerX * zoom,
-        y: rect.height / 2 - centerY * zoom
+    // Set zoom to 50%
+    const targetZoom = 0.5
+    
+    // Calculate available space at 50% zoom
+    const availableWidth = canvasWidth / targetZoom
+    const availableHeight = canvasHeight / targetZoom
+    
+    // Natural spacing algorithm - position nodes organically based on levels and connections
+    const padding = 200
+    const centerX = availableWidth / 2
+    const centerY = availableHeight / 2
+    
+    // Group nodes by level
+    const nodesByLevel = new Map<number, Node[]>()
+    nodes.forEach(node => {
+      const level = node.level ?? 0
+      if (!nodesByLevel.has(level)) {
+        nodesByLevel.set(level, [])
+      }
+      nodesByLevel.get(level)!.push(node)
+    })
+    
+    // Find home node (level 0)
+    const homeNode = nodes.find(n => n.level === 0) || nodes[0]
+    
+    // Natural spacing constants
+    const level1Radius = Math.min(availableWidth, availableHeight) * 0.25 // 25% of canvas
+    const level2Radius = Math.min(availableWidth, availableHeight) * 0.15 // 15% of canvas
+    const minNodeDistance = 250 // Minimum distance between nodes
+    
+    // First pass: position all nodes
+    const newNodes = nodes.map(node => {
+      if (node.level === 0 || node.id === homeNode.id) {
+        // Home node - position near center, slightly offset
+        return {
+          ...node,
+          x: centerX - 100,
+          y: centerY - 150
+        }
+      }
+      
+      // Get level 1 nodes (directly connected to home)
+      const level1Nodes = nodesByLevel.get(1) || []
+      const level1Index = level1Nodes.findIndex(n => n.id === node.id)
+      
+      if (node.level === 1) {
+        // Level 1 nodes - arrange in a natural arc around home
+        const angle = (level1Index / Math.max(level1Nodes.length, 1)) * Math.PI * 1.5 + Math.PI / 4
+        const radius = level1Radius + (level1Index % 2) * 50 // Vary radius slightly for natural look
+        return {
+          ...node,
+          x: centerX - 100 + Math.cos(angle) * radius,
+          y: centerY - 150 + Math.sin(angle) * radius
+        }
+      }
+      
+      // Fallback for now - will be positioned in second pass
+      const nodeIndex = nodes.findIndex(n => n.id === node.id)
+      const fallbackX = padding + (nodeIndex * 150) % (availableWidth - padding * 2)
+      const fallbackY = padding + Math.floor(nodeIndex / 3) * 150 % (availableHeight - padding * 2)
+      return {
+        ...node,
+        x: fallbackX,
+        y: fallbackY
+      }
+    })
+    
+    // Second pass: position level 2+ nodes relative to their parents
+    const finalPositionedNodes = newNodes.map(node => {
+      if (node.level === 0 || node.level === 1) {
+        return node // Already positioned
+      }
+      
+      // Level 2+ nodes - position relative to their parent
+      const parentConnections = connections.filter(c => c.to === node.id)
+      if (parentConnections.length > 0) {
+        const parentId = parentConnections[0].from
+        const parentNode = newNodes.find(n => n.id === parentId)
+        if (parentNode) {
+          // Find all siblings (nodes with same parent)
+          const allSiblings = newNodes.filter(n => {
+            const conn = connections.find(c => c.to === n.id && c.from === parentId)
+            return conn && n.level === node.level
+          })
+          const actualSiblingIndex = allSiblings.findIndex(n => n.id === node.id)
+          const offsetAngle = (actualSiblingIndex - allSiblings.length / 2) * 0.5
+          const baseAngle = Math.atan2(
+            parentNode.y - (centerY - 150),
+            parentNode.x - (centerX - 100)
+          )
+          const distance = level2Radius + (actualSiblingIndex % 3) * 30 // Vary distance for natural look
+          
+          return {
+            ...node,
+            x: parentNode.x + Math.cos(baseAngle + offsetAngle) * distance,
+            y: parentNode.y + Math.sin(baseAngle + offsetAngle) * distance
+          }
+        }
+      }
+      
+      return node // Keep fallback position
+    })
+    
+    // Apply force-directed spacing to prevent overlaps
+    const finalNodes = [...finalPositionedNodes]
+    for (let i = 0; i < 10; i++) { // Iterate a few times for natural spacing
+      finalNodes.forEach((node, idx) => {
+        let fx = 0, fy = 0
+        
+        finalNodes.forEach((otherNode, otherIdx) => {
+          if (idx === otherIdx) return
+          
+          const dx = otherNode.x - node.x
+          const dy = otherNode.y - node.y
+          const distance = Math.sqrt(dx * dx + dy * dy) || 1
+          
+          // Repulsion force - push nodes apart
+          if (distance < minNodeDistance) {
+            const force = (minNodeDistance - distance) / minNodeDistance
+            fx -= (dx / distance) * force * 20
+            fy -= (dy / distance) * force * 20
+          }
+        })
+        
+        // Apply forces with damping
+        node.x = Math.max(padding, Math.min(availableWidth - padding, node.x + fx * 0.1))
+        node.y = Math.max(padding, Math.min(availableHeight - padding, node.y + fy * 0.1))
       })
     }
+    
+    setNodes(finalNodes)
+    
+    // Center the nodes in view at 50% zoom
+    const allX = finalNodes.map(n => n.x)
+    const allY = finalNodes.map(n => n.y)
+    const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
+    const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
+    
+    setPanOffset({
+      x: canvasWidth / 2 - centerNodeX * targetZoom,
+      y: canvasHeight / 2 - centerNodeY * targetZoom
+    })
+    setZoom(targetZoom) // 50% zoom with naturally spaced nodes
   }
 
-  // Auto-center when nodes are first generated
+  // Track if we've auto-fitted for current node set
+  const lastNodeCount = useRef(0)
   useEffect(() => {
-    if (nodes.length > 0 && panOffset.x === 0 && panOffset.y === 0 && zoom === 1) {
-      setTimeout(() => centerView(), 100)
+    // Only auto-fit when node count changes (new generation)
+    if (nodes.length > 0 && nodes.length !== lastNodeCount.current) {
+      lastNodeCount.current = nodes.length
+      setTimeout(() => {
+        centerView()
+      }, 300) // Wait a bit longer for canvas to be fully rendered
     }
   }, [nodes.length])
 
@@ -874,9 +993,24 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           }
         }}
         onWheel={(e) => {
-          e.preventDefault()
-          const delta = e.deltaY > 0 ? -0.1 : 0.1
-          handleZoom(delta)
+          // Only zoom with Ctrl/Cmd + wheel
+          // Trackpad gestures have small deltas (< 50), mouse wheel has larger jumps
+          const isZoomGesture = e.ctrlKey || e.metaKey
+          const isMouseWheel = Math.abs(e.deltaY) > 50
+          
+          if (isZoomGesture || isMouseWheel) {
+            // Zoom gesture
+            e.preventDefault()
+            const delta = e.deltaY > 0 ? -0.1 : 0.1
+            handleZoom(delta)
+          } else {
+            // Trackpad scroll - pan the canvas
+            e.preventDefault()
+            setPanOffset(prev => ({
+              x: prev.x - e.deltaX,
+              y: prev.y - e.deltaY
+            }))
+          }
         }}
       >
         <div ref={canvasContainerRef} className="w-full h-full relative">

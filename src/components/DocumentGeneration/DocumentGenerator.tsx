@@ -245,7 +245,102 @@ const DocumentGenerator = ({ onClose, isStandalone = false, onProjectCreated }: 
     )
   }
 
-  return null
+  // Modal mode - show form when no content generated yet
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-dark-card rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl border border-divider/50">
+        <div className="p-5 border-b border-divider/50 flex items-center justify-between bg-dark-surface/30">
+          <h2 className="text-lg font-heading font-semibold text-charcoal">Create New Project</h2>
+          <button 
+            onClick={onClose}
+            className="text-mid-grey hover:text-charcoal transition-colors p-2 hover:bg-dark-surface rounded-lg"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="p-8 overflow-y-auto flex-1">
+          {!documentType ? (
+            <div className="grid grid-cols-2 gap-4 mb-8">
+              {(['PRD', 'Design Prompt', 'User Stories', 'Specs'] as DocumentType[]).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setDocumentType(type)}
+                  className="group p-5 bg-dark-card/50 hover:bg-dark-card rounded-lg border border-divider/50 hover:border-amber-gold/50 transition-all text-left hover:shadow-md"
+                >
+                  <div className="mb-3 group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-amber-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="text-lg font-semibold text-charcoal mb-1">{type}</div>
+                  <div className="text-sm text-mid-grey">Generate structured {type.toLowerCase()}</div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-dark-card rounded-lg shadow-lg border border-divider/50 overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-divider/50 flex items-center gap-2.5 bg-dark-surface/30">
+                <button
+                  onClick={() => setDocumentType(null)}
+                  className="text-mid-grey hover:text-charcoal transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <span className="text-sm font-semibold text-amber-gold">{documentType}</span>
+              </div>
+              
+              <div className="p-8">
+                <div className="mb-6">
+                  <div className="text-sm text-mid-grey mb-2">Describe your project</div>
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        handleGenerate()
+                      }
+                    }}
+                    className="w-full min-h-[300px] px-4 py-4 border border-divider/50 rounded-lg focus:outline-none focus:border-amber-gold/50 focus:ring-2 focus:ring-amber-gold/30 resize-none text-sm text-charcoal placeholder:text-mid-grey/50 font-body leading-relaxed bg-dark-surface"
+                    placeholder="Start typing... Describe your project idea, goals, users, features, or anything else that comes to mind.&#10;&#10;Press Cmd/Ctrl + Enter to generate"
+                    autoFocus
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between pt-6 border-t border-divider">
+                  <div className="text-sm text-mid-grey">
+                    {input.length > 0 && `${input.length} characters`}
+                  </div>
+                  <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !input.trim()}
+                    className="px-8 py-3 bg-amber-gold text-white rounded-lg font-semibold hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  >
+                    {isGenerating ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                      </span>
+                    ) : (
+                      'Generate →'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default DocumentGenerator

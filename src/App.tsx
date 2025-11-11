@@ -30,11 +30,11 @@ const AppContent = () => {
   const renderContent = () => {
     switch (activeView) {
       case 'Projects':
-        return <Dashboard />
+        return <Dashboard onNavigateToNew={() => setActiveView('Templates')} />
       case 'Templates':
         return <MainWorkspace />
       default:
-        return <Dashboard />
+        return <Dashboard onNavigateToNew={() => setActiveView('Templates')} />
     }
   }
 

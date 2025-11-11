@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 
 const Login = () => {
-  const [isSignUp, setIsSignUp] = useState(true) // Default to signup to show name field
+  const [isSignUp, setIsSignUp] = useState(false) // Default to signin
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

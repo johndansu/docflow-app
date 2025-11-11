@@ -3,7 +3,7 @@ import DocumentViewer from '../DocumentGeneration/DocumentViewer'
 import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
 import { storage, type SiteFlowData } from '../../utils/storage'
-import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories } from '../../utils/contentGenerator'
+import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories, generateSpecs } from '../../utils/contentGenerator'
 
 type View = 'input' | 'generating' | 'results'
 
@@ -37,6 +37,7 @@ const MainWorkspace = () => {
       'Generating PRD...',
       'Creating design brief...',
       'Writing user stories...',
+      'Generating specs...',
       'Mapping site flow...',
       'Finalizing documentation...'
     ]
@@ -72,8 +73,12 @@ const MainWorkspace = () => {
       const designContent = await generateDesignPrompt(info, appDescription)
       
       setGeneratingStep('Writing user stories...')
-      setGenerationProgress(80)
+      setGenerationProgress(70)
       const storiesContent = await generateUserStories(info, appDescription)
+      
+      setGeneratingStep('Generating specs...')
+      setGenerationProgress(85)
+      const specsContent = await generateSpecs(info, appDescription)
       
       clearInterval(progressInterval)
       clearInterval(stepInterval)
@@ -93,6 +98,11 @@ const MainWorkspace = () => {
           type: 'User Stories',
           name: info.projectName,
           content: storiesContent
+        },
+        {
+          type: 'Specs',
+          name: info.projectName,
+          content: specsContent
         }
       ]
       
