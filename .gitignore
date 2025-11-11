@@ -17,6 +17,9 @@ dist-ssr
 .env.local
 .env.production
 
+# Supabase (values only, not the keys themselves)
+# Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env file
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -27,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Markdown files (except README.md)
+*.md
+!README.md

@@ -61,12 +61,12 @@ const DocumentGenerator = ({ onClose, isStandalone = false, onProjectCreated }: 
     }
   }
 
-  const handleSaveProject = () => {
+  const handleSaveProject = async () => {
     if (!generatedContent || !documentType || !projectName) return
     
     setIsSaving(true)
     try {
-      storage.save({
+      await storage.save({
         title: projectName,
         type: documentType,
         description: input.substring(0, 200) || `Generated ${documentType} document`,

@@ -21,12 +21,15 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
   const [activeTab, setActiveTab] = useState<'documents' | 'siteflow'>('documents')
 
   useEffect(() => {
-    const loadedProject = storage.get(projectId)
-    if (loadedProject) {
-      setProject(loadedProject)
-      setEditedTitle(loadedProject.title)
-      setEditedDescription(loadedProject.description)
+    const loadProject = async () => {
+      const loadedProject = await storage.get(projectId)
+      if (loadedProject) {
+        setProject(loadedProject)
+        setEditedTitle(loadedProject.title)
+        setEditedDescription(loadedProject.description)
+      }
     }
+    loadProject()
   }, [projectId])
 
   useEffect(() => {
@@ -40,10 +43,10 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onClose, showDeleteConfirm])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!project) return
     
-    const updated = storage.update(project.id, {
+    const updated = await storage.update(project.id, {
       title: editedTitle,
       description: editedDescription,
     })
@@ -54,9 +57,9 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
     }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!project) return
-    storage.delete(project.id)
+    await storage.delete(project.id)
     onDelete()
   }
 

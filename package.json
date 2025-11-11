@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "setup-db": "node setup-database.js"
   },
   "devDependencies": {
     "typescript": "~5.9.3",
     "vite": "^7.1.7"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.81.0",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

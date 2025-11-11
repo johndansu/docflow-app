@@ -33,68 +33,32 @@ export type Project = {
 
 const STORAGE_KEY = 'docflow-projects'
 
+// Import Supabase storage (will use Supabase if configured, otherwise localStorage)
+import { supabaseStorage } from './supabaseStorage'
+
 export const storage = {
-  getAll(): Project[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEY)
-      return data ? JSON.parse(data) : []
-    } catch (error) {
-      console.error('Error reading from storage:', error)
-      return []
-    }
+  async getAll(): Promise<Project[]> {
+    return await supabaseStorage.getAll()
   },
 
-  get(id: string): Project | null {
-    const projects = this.getAll()
-    return projects.find(p => p.id === id) || null
+  async get(id: string): Promise<Project | null> {
+    return await supabaseStorage.get(id)
   },
 
-  save(project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Project {
-    const projects = this.getAll()
-    const now = new Date().toISOString()
-    
-    const newProject: Project = {
-      ...project,
-      id: crypto.randomUUID(),
-      createdAt: now,
-      updatedAt: now,
-      // Ensure documents array is included if provided
-      documents: project.documents || undefined,
-    }
-    
-    projects.push(newProject)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-    return newProject
+  async save(project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
+    return await supabaseStorage.save(project)
   },
 
-  update(id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>): Project | null {
-    const projects = this.getAll()
-    const index = projects.findIndex(p => p.id === id)
-    
-    if (index === -1) return null
-    
-    projects[index] = {
-      ...projects[index],
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    }
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-    return projects[index]
+  async update(id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>): Promise<Project | null> {
+    return await supabaseStorage.update(id, updates)
   },
 
-  delete(id: string): boolean {
-    const projects = this.getAll()
-    const filtered = projects.filter(p => p.id !== id)
-    
-    if (filtered.length === projects.length) return false
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
-    return true
+  async delete(id: string): Promise<boolean> {
+    return await supabaseStorage.delete(id)
   },
 
-  clear(): void {
-    localStorage.removeItem(STORAGE_KEY)
+  async clear(): Promise<void> {
+    return await supabaseStorage.clear()
   },
 
   formatDate(dateString: string): string {

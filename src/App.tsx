@@ -1,13 +1,31 @@
 import { useState } from 'react'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Header from './components/Layout/Header'
 import Sidebar from './components/Layout/Sidebar'
 import MainWorkspace from './components/Workspace/MainWorkspace'
 import Dashboard from './components/Dashboard/Dashboard'
+import Login from './components/Auth/Login'
 
 type View = 'Projects' | 'Templates'
 
-function App() {
+const AppContent = () => {
   const [activeView, setActiveView] = useState<View>('Projects')
+  const { user, loading } = useAuth()
+
+  const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-light-neutral">
+        <div className="text-charcoal">Loading...</div>
+      </div>
+    )
+  }
+
+  // Only require auth if Supabase is configured
+  if (isSupabaseConfigured && !user) {
+    return <Login />
+  }
 
   const renderContent = () => {
     switch (activeView) {
@@ -32,6 +50,14 @@ function App() {
         </main>
       </div>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

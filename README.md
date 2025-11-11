@@ -35,37 +35,53 @@ DocFlow is an AI-powered workspace that helps solo creators and indie developers
 npm install
 ```
 
-2. Configure AI Agent (Required for AI-powered generation):
+2. Configure Supabase Authentication (Required):
    
-   Create a `.env` file in the root directory with your AI provider configuration:
+   Create a `.env` file in the root directory with your Supabase credentials:
    
    ```env
-   # Choose your AI provider: 'openai', 'anthropic', or 'custom'
-   VITE_AI_PROVIDER=openai
+   # Supabase Configuration (Required for authentication)
+   VITE_SUPABASE_URL=your_supabase_project_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    
-   # Your API key (get from provider's website)
-   VITE_AI_API_KEY=your_api_key_here
-   
-   # Optional: Specify model (defaults to gpt-4o-mini for OpenAI, claude-3-5-sonnet-20241022 for Anthropic)
+   # AI Agent Configuration (Optional - for AI-powered generation)
+   VITE_AI_PROVIDER=groq
+   VITE_AI_API_KEY=your_ai_api_key_here
    VITE_AI_MODEL=
-   
-   # Optional: Base URL for custom providers (only if using custom)
    VITE_AI_BASE_URL=
    ```
    
+   **Setting up Supabase:**
+   1. Go to [Supabase](https://supabase.com) and create a free account
+   2. Click **"New Project"** and fill in details (choose Free plan)
+   3. Wait 2-3 minutes for project setup
+   4. Go to **Project Settings → API**
+   5. Copy your **Project URL** and **anon/public key**
+   6. Add them to your `.env` file as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+   7. Go to **SQL Editor** and run the SQL script from `SUPABASE_SETUP.md` to create the database table
+   8. Restart your dev server
+   
+   **Quick Setup Guide**: See `SUPABASE_QUICK_START.md` for detailed step-by-step instructions.
+   
+   **Note**: Authentication is required to use the app. Projects are stored per user account in Supabase.
+
+3. Configure AI Agent (Optional - for AI-powered generation):
+   
    **Getting API Keys:**
+   - **Groq** (Recommended - Free): Get your API key from [Groq Console](https://console.groq.com/) (Free tier, very fast!)
    - **OpenAI**: Get your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
    - **Anthropic**: Get your API key from [Anthropic Console](https://console.anthropic.com/)
+   - **DeepSeek**: Get your API key from [DeepSeek Platform](https://platform.deepseek.com/)
    - **Custom**: Use any OpenAI-compatible API endpoint
    
-   **Note**: If no API key is configured, the app will use template-based fallback generation.
+   **Note**: If no AI API key is configured, the app will use template-based fallback generation.
 
-3. Start the development server:
+4. Start the development server:
 ```bash
 npm run dev
 ```
 
-4. Build for production:
+5. Build for production:
 ```bash
 npm run build
 ```

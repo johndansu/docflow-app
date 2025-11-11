@@ -133,7 +133,7 @@ const MainWorkspace = () => {
         content: doc.content,
       }))
       
-      storage.save({
+      await storage.save({
         title: projectName || 'Untitled Project',
         type: 'PRD', // Default type for backward compatibility
         description: appDescription.substring(0, 200) || `Complete project documentation`,

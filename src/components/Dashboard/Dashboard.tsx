@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import DocumentGenerator from '../DocumentGeneration/DocumentGenerator'
 import ProjectDetail from '../Project/ProjectDetail'
 import { storage } from '../../utils/storage'
+import { supabaseStorage } from '../../utils/supabaseStorage'
 import type { Project } from '../../utils/storage'
 
 const Dashboard = () => {
@@ -14,6 +15,20 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadProjects()
+    
+    // Migrate localStorage data to Supabase on first load (if user is authenticated)
+    const migrateData = async () => {
+      try {
+        const migrated = await supabaseStorage.migrateFromLocalStorage()
+        if (migrated > 0) {
+          await loadProjects() // Reload after migration
+        }
+      } catch (error) {
+        // Migration failed or not needed, continue normally
+        console.log('Migration check:', error)
+      }
+    }
+    migrateData()
     
     // Listen for storage changes (when projects are added/updated from other components)
     const handleStorageChange = () => {
@@ -69,15 +84,15 @@ const Dashboard = () => {
     }
   }, [selectedProjectId, showGenerator])
 
-  const loadProjects = () => {
-    const allProjects = storage.getAll()
+  const loadProjects = async () => {
+    const allProjects = await storage.getAll()
     setProjects(allProjects)
   }
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (window.confirm('Are you sure you want to delete all projects? This action cannot be undone.')) {
-      storage.clear()
-      loadProjects()
+      await storage.clear()
+      await loadProjects()
       window.dispatchEvent(new CustomEvent('projectsUpdated'))
     }
   }
@@ -92,11 +107,11 @@ const Dashboard = () => {
     setSelectedProjectId(null)
   }
 
-  const handleDeleteProject = (e: React.MouseEvent, projectId: string) => {
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
     e.stopPropagation() // Prevent opening the project detail
     if (window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      storage.delete(projectId)
-      loadProjects()
+      await storage.delete(projectId)
+      await loadProjects()
       if (selectedProjectId === projectId) {
         setSelectedProjectId(null)
       }
