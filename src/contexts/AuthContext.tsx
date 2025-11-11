@@ -6,10 +6,9 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
-  signUp: (email: string, password: string) => Promise<{ error: any }>
+  signUp: (email: string, password: string, name?: string) => Promise<{ error: any }>
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<void>
-  signInWithGoogle: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -63,14 +62,36 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe()
   }, [isSupabaseConfigured])
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, name?: string) => {
     if (!isSupabaseConfigured) {
       return { error: { message: 'Supabase is not configured. Please add credentials to .env file.' } }
     }
-    const { error } = await supabase.auth.signUp({
+    
+    const nameToSave = name?.trim() || email.split('@')[0]
+    console.log('Signing up with name:', nameToSave)
+    
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          name: nameToSave,
+        },
+      },
     })
+    
+    console.log('Signup response:', { user: data.user, error })
+    if (data.user) {
+      console.log('User metadata after signup:', data.user.user_metadata)
+      setUser(data.user)
+      // Also refresh session to ensure we have the latest user data
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (sessionData.session) {
+        setSession(sessionData.session)
+        setUser(sessionData.session.user)
+      }
+    }
+    
     return { error }
   }
 
@@ -78,28 +99,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!isSupabaseConfigured) {
       return { error: { message: 'Supabase is not configured. Please add credentials to .env file.' } }
     }
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
+    
+    // Refresh user data after sign in
+    if (data.user) {
+      console.log('User metadata after sign in:', data.user.user_metadata)
+      setUser(data.user)
+      if (data.session) {
+        setSession(data.session)
+      }
+    }
+    
     return { error }
   }
 
   const signOut = async () => {
     if (!isSupabaseConfigured) return
     await supabase.auth.signOut()
-  }
-
-  const signInWithGoogle = async () => {
-    if (!isSupabaseConfigured) {
-      return
-    }
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-      },
-    })
   }
 
   const value = {
@@ -109,7 +128,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signUp,
     signIn,
     signOut,
-    signInWithGoogle,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

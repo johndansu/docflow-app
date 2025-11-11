@@ -59,11 +59,17 @@ npm install
    5. Copy your **Project URL** and **anon/public key**
    6. Add them to your `.env` file as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
    7. Go to **SQL Editor** and run the SQL script from `SUPABASE_SETUP.md` to create the database table
-   8. Restart your dev server
+   8. **Disable email confirmation** (for easier testing):
+      - Go to **Authentication → Settings**
+      - Under **Email Auth**, toggle **OFF** "Confirm email"
+   9. Restart your dev server
    
    **Quick Setup Guide**: See `SUPABASE_QUICK_START.md` for detailed step-by-step instructions.
    
-   **Note**: Authentication is required to use the app. Projects are stored per user account in Supabase.
+   **Important Notes**: 
+   - ✅ **Each user has isolated storage** - Projects are automatically filtered by user (RLS policies ensure this)
+   - ✅ **Email confirmation can be disabled** for development/testing (more comfortable)
+   - ⚠️ Enable email confirmation for production (see `EMAIL_CONFIRMATION_GUIDE.md`)
 
 3. Configure AI Agent (Optional - for AI-powered generation):
    

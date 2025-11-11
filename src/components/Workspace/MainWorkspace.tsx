@@ -129,8 +129,8 @@ const MainWorkspace = () => {
       // Save all documents as a single project
       const prdDoc = generatedDocs.find(doc => doc.type === 'PRD')
       const documents = generatedDocs.map(doc => ({
-        type: doc.type as 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs',
-        content: doc.content,
+          type: doc.type as 'PRD' | 'Design Prompt' | 'User Stories' | 'Specs',
+          content: doc.content,
       }))
       
       await storage.save({
