@@ -744,9 +744,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     
     // Natural spacing algorithm - position nodes organically based on levels and connections
     const padding = 200
-    const centerX = availableWidth / 2
-    const centerY = availableHeight / 2
-    
     const nodesByLevel = new Map<number, Node[]>()
     nodes.forEach(node => {
       const level = node.level ?? 0
@@ -756,101 +753,34 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       nodesByLevel.get(level)!.push(node)
     })
 
+    const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b)
+    const maxLevel = sortedLevels[sortedLevels.length - 1] ?? 0
+    const columnWidth = maxLevel > 0 ? (availableWidth - padding * 2) / maxLevel : 0
+    const basePositions = new Map<string, { x: number; y: number }>()
+
+    sortedLevels.forEach((level) => {
+      const nodesAtLevel = nodesByLevel.get(level) || []
+      if (nodesAtLevel.length === 0) return
+
+      const verticalSpacing = (availableHeight - padding * 2) / Math.max(nodesAtLevel.length, 1)
+      nodesAtLevel.forEach((node, index) => {
+        const x = padding + columnWidth * level
+        const y = nodesAtLevel.length === 1
+          ? availableHeight / 2
+          : padding + verticalSpacing / 2 + index * verticalSpacing
+        basePositions.set(node.id, { x, y })
+      })
+    })
+
+    const initialNodes = nodes.map(node => {
+      const base = basePositions.get(node.id)
+      if (base) {
+        return { ...node, x: base.x, y: base.y }
+      }
+      return { ...node, x: padding, y: availableHeight / 2 }
+    })
+
     const minNodeDistance = Math.min(availableWidth, availableHeight) * 0.12
-
-    const nodesById = new Map<string, Node>(nodes.map(node => [node.id, node]))
-    const allLevels = Array.from(nodesByLevel.keys()).filter(level => level > 0).sort((a, b) => a - b)
-
-    const parentToChildren = new Map<string, Node[]>()
-    connections.forEach((conn) => {
-      const child = nodesById.get(conn.to)
-      if (!child) return
-      if (!parentToChildren.has(conn.from)) {
-        parentToChildren.set(conn.from, [])
-      }
-      parentToChildren.get(conn.from)!.push(child)
-    })
-
-    const placedNodes = new Map<string, Node>()
-    const nodeAngles = new Map<string, number>()
-
-    const placeNode = (node: Node, angle: number, radius: number) => {
-      const x = centerX + Math.cos(angle) * radius
-      const y = centerY + Math.sin(angle) * radius
-      placedNodes.set(node.id, { ...node, x, y })
-      nodeAngles.set(node.id, angle)
-    }
-
-    // Place home node at center
-    const homeNode = nodes.find(n => n.level === 0) || nodes[0]
-    placedNodes.set(homeNode.id, { ...homeNode, x: centerX, y: centerY })
-    nodeAngles.set(homeNode.id, -Math.PI / 2)
-
-    const baseRadius = Math.min(availableWidth, availableHeight) * 0.28
-    const levelGap = Math.min(availableWidth, availableHeight) * 0.18
-
-    // Level 1 nodes evenly around the home node
-    const level1Nodes = nodesByLevel.get(1) || []
-    const level1Count = level1Nodes.length
-    if (level1Count > 0) {
-      level1Nodes.forEach((node, idx) => {
-        const angle = level1Count === 1
-          ? -Math.PI / 2
-          : ((2 * Math.PI) * idx) / level1Count - Math.PI / 2
-        placeNode(node, angle, baseRadius)
-      })
-    }
-
-    // Higher-level nodes positioned around their parents
-    allLevels.forEach((level) => {
-      if (level <= 1) return
-      const levelNodes = nodesByLevel.get(level) || []
-      if (levelNodes.length === 0) return
-      const levelRadius = baseRadius + levelGap * (level - 1)
-      const remaining = new Set(levelNodes.map(node => node.id))
-
-      parentToChildren.forEach((children, parentId) => {
-        const group = children.filter(child => (child.level ?? 0) === level)
-        if (group.length === 0) return
-        const parent = placedNodes.get(parentId)
-        if (!parent) return
-
-        const parentAngle = nodeAngles.get(parentId) ?? -Math.PI / 2
-        const count = group.length
-        const spread = Math.min(Math.PI / 1.4, 0.4 * count)
-        const step = count > 1 ? spread / (count - 1) : 0
-        const startAngle = parentAngle - spread / 2
-
-        group.forEach((child, index) => {
-          const angle = count > 1 ? startAngle + index * step : parentAngle
-          placeNode(child, angle, levelRadius)
-          remaining.delete(child.id)
-        })
-      })
-
-      // Any remaining nodes without placed parents are distributed evenly
-      const remainingIds = Array.from(remaining)
-      const remainingCount = remainingIds.length
-      if (remainingCount > 0) {
-        remainingIds.forEach((id, idx) => {
-          const node = nodesById.get(id)
-          if (!node) return
-          const angle = remainingCount === 1
-            ? -Math.PI / 2
-            : ((2 * Math.PI) * idx) / remainingCount - Math.PI / 2
-          placeNode(node, angle, levelRadius)
-        })
-      }
-    })
-
-    // Ensure every node has a position
-    nodes.forEach((node) => {
-      if (!placedNodes.has(node.id)) {
-        placedNodes.set(node.id, { ...node, x: centerX, y: centerY })
-      }
-    })
-
-    const initialNodes = nodes.map(node => placedNodes.get(node.id) ?? node)
 
     // Apply force-directed spacing to prevent overlaps - enhanced algorithm
     const finalNodes = initialNodes.map(node => ({ ...node }))
@@ -884,10 +814,17 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           }
         })
 
+        const base = basePositions.get(node.id)
         const newX = node.x + fx * damping
         const newY = node.y + fy * damping
 
-        node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, newX))
+        if (base) {
+          const maxOffset = columnWidth * 0.25
+          const clampedX = Math.max(base.x - maxOffset, Math.min(base.x + maxOffset, newX))
+          node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
+        } else {
+          node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, newX))
+        }
         node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, newY))
       })
     }
@@ -907,10 +844,26 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           const pushX = (dx / distance) * pushDistance
           const pushY = (dy / distance) * pushDistance
 
-          node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, node.x - pushX))
+          const base = basePositions.get(node.id)
+          if (base) {
+            const maxOffset = columnWidth * 0.25
+            const targetX = node.x - pushX
+            const clampedX = Math.max(base.x - maxOffset, Math.min(base.x + maxOffset, targetX))
+            node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
+          } else {
+            node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, node.x - pushX))
+          }
           node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, node.y - pushY))
 
-          otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, otherNode.x + pushX))
+          const otherBase = basePositions.get(otherNode.id)
+          if (otherBase) {
+            const maxOffsetOther = columnWidth * 0.25
+            const targetOtherX = otherNode.x + pushX
+            const clampedOtherX = Math.max(otherBase.x - maxOffsetOther, Math.min(otherBase.x + maxOffsetOther, targetOtherX))
+            otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedOtherX))
+          } else {
+            otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, otherNode.x + pushX))
+          }
           otherNode.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, otherNode.y + pushY))
         }
       })
