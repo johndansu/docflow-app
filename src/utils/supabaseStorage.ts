@@ -1,7 +1,94 @@
 import { supabase } from './supabase'
 import type { Project, ProjectDocument, SiteFlowData } from './storage'
+import type { Database, Json } from '../types/database.types'
+
+type ProjectRow = Database['public']['Tables']['projects']['Row']
+type ProjectInsert = Database['public']['Tables']['projects']['Insert']
+type ProjectUpdate = Database['public']['Tables']['projects']['Update']
 
 const isSupabaseConfigured = import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY
+
+const toDocumentsJson = (documents?: ProjectDocument[] | null): Json | null => {
+  if (documents === undefined || documents === null) {
+    return null
+  }
+  return documents as unknown as Json
+}
+
+const toSiteFlowJson = (siteFlow?: SiteFlowData | null): Json | null => {
+  if (siteFlow === undefined || siteFlow === null) {
+    return null
+  }
+  return siteFlow as unknown as Json
+}
+
+const isProjectDocument = (value: unknown): value is ProjectDocument => {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const doc = value as Partial<ProjectDocument>
+  return typeof doc.type === 'string' && typeof doc.content === 'string'
+}
+
+const parseDocuments = (value: Json | null): ProjectDocument[] | undefined => {
+  if (!Array.isArray(value)) return undefined
+  return value.filter(isProjectDocument) as ProjectDocument[]
+}
+
+const isSiteFlowData = (value: unknown): value is SiteFlowData => {
+  if (!value || typeof value !== 'object') return false
+  const data = value as Partial<SiteFlowData>
+  if (!Array.isArray(data.nodes) || !Array.isArray(data.connections)) return false
+
+  const nodesValid = data.nodes.every((node) => {
+    if (!node || typeof node !== 'object') return false
+    const candidate = node as SiteFlowData['nodes'][number]
+    return (
+      typeof candidate.id === 'string' &&
+      typeof candidate.name === 'string' &&
+      typeof candidate.description === 'string' &&
+      typeof candidate.x === 'number' &&
+      typeof candidate.y === 'number'
+    )
+  })
+
+  const connectionsValid = data.connections.every((connection) => {
+    if (!connection || typeof connection !== 'object') return false
+    const candidate = connection as SiteFlowData['connections'][number]
+    return typeof candidate.from === 'string' && typeof candidate.to === 'string'
+  })
+
+  return nodesValid && connectionsValid
+}
+
+const parseSiteFlow = (value: Json | null): SiteFlowData | undefined => {
+  if (!value) return undefined
+  return isSiteFlowData(value) ? value : undefined
+}
+
+const mapRowToProject = (row: ProjectRow): Project => {
+  const project: Project = {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    description: row.description ?? '',
+    content: row.content,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+
+  const documents = parseDocuments(row.documents)
+  if (documents !== undefined) {
+    project.documents = documents
+  }
+
+  const siteFlow = parseSiteFlow(row.site_flow)
+  if (siteFlow) {
+    project.siteFlow = siteFlow
+  }
+
+  return project
+}
 
 /**
  * Supabase storage for projects
@@ -39,20 +126,20 @@ export const supabaseStorage = {
       let migrated = 0
       for (const project of localProjects) {
         try {
-          const { error } = await supabase
-            .from('projects')
-            .insert({
-              id: project.id, // Keep original ID
-              user_id: user.id,
-              title: project.title,
-              type: project.type,
-              description: project.description,
-              content: project.content,
-              documents: project.documents || null,
-              site_flow: project.siteFlow || null,
-              created_at: project.createdAt,
-              updated_at: project.updatedAt,
-            })
+          const payload: ProjectInsert = {
+            id: project.id, // Keep original ID
+            user_id: user.id,
+            title: project.title,
+            type: project.type,
+            description: project.description,
+            content: project.content,
+            documents: toDocumentsJson(project.documents),
+            site_flow: toSiteFlowJson(project.siteFlow),
+            created_at: project.createdAt,
+            updated_at: project.updatedAt,
+          }
+
+          const { error } = await supabase.from('projects').insert(payload)
 
           if (!error) {
             migrated++
@@ -97,17 +184,8 @@ export const supabaseStorage = {
         return []
       }
 
-      return (data || []).map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        type: row.type,
-        description: row.description,
-        content: row.content,
-        documents: row.documents,
-        siteFlow: row.site_flow,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }))
+      const rows = (data ?? []) as ProjectRow[]
+      return rows.map(mapRowToProject)
     } catch (error) {
       console.error('Error in getAll:', error)
       return []
@@ -135,17 +213,7 @@ export const supabaseStorage = {
 
       if (error || !data) return null
 
-      return {
-        id: data.id,
-        title: data.title,
-        type: data.type,
-        description: data.description,
-        content: data.content,
-        documents: data.documents,
-        siteFlow: data.site_flow,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      }
+      return mapRowToProject(data as ProjectRow)
     } catch (error) {
       console.error('Error in get:', error)
       return null
@@ -167,19 +235,21 @@ export const supabaseStorage = {
       }
 
       const now = new Date().toISOString()
+      const payload: ProjectInsert = {
+        user_id: user.id,
+        title: project.title,
+        type: project.type,
+        description: project.description,
+        content: project.content,
+        documents: toDocumentsJson(project.documents),
+        site_flow: toSiteFlowJson(project.siteFlow),
+        created_at: now,
+        updated_at: now,
+      }
+
       const { data, error } = await supabase
         .from('projects')
-        .insert({
-          user_id: user.id,
-          title: project.title,
-          type: project.type,
-          description: project.description,
-          content: project.content,
-          documents: project.documents || null,
-          site_flow: project.siteFlow || null,
-          created_at: now,
-          updated_at: now,
-        })
+        .insert(payload)
         .select()
         .single()
 
@@ -188,17 +258,7 @@ export const supabaseStorage = {
         throw error
       }
 
-      return {
-        id: data.id,
-        title: data.title,
-        type: data.type,
-        description: data.description,
-        content: data.content,
-        documents: data.documents,
-        siteFlow: data.site_flow,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      }
+      return mapRowToProject(data as ProjectRow)
     } catch (error) {
       console.error('Error in save:', error)
       throw error
@@ -217,15 +277,15 @@ export const supabaseStorage = {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
 
-      const updateData: any = {
+      const updateData: ProjectUpdate = {
         updated_at: new Date().toISOString(),
       }
 
       if (updates.title !== undefined) updateData.title = updates.title
       if (updates.description !== undefined) updateData.description = updates.description
       if (updates.content !== undefined) updateData.content = updates.content
-      if (updates.documents !== undefined) updateData.documents = updates.documents
-      if (updates.siteFlow !== undefined) updateData.site_flow = updates.siteFlow
+      if (updates.documents !== undefined) updateData.documents = toDocumentsJson(updates.documents)
+      if (updates.siteFlow !== undefined) updateData.site_flow = toSiteFlowJson(updates.siteFlow)
 
       const { data, error } = await supabase
         .from('projects')
@@ -237,17 +297,7 @@ export const supabaseStorage = {
 
       if (error || !data) return null
 
-      return {
-        id: data.id,
-        title: data.title,
-        type: data.type,
-        description: data.description,
-        content: data.content,
-        documents: data.documents,
-        siteFlow: data.site_flow,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      }
+      return mapRowToProject(data as ProjectRow)
     } catch (error) {
       console.error('Error in update:', error)
       return null

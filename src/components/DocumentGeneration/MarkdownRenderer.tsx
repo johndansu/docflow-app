@@ -10,21 +10,22 @@ const MarkdownRenderer = ({ content, className = '' }: MarkdownRendererProps) =>
   const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (contentRef.current && content) {
-      // Configure marked options for better rendering
-      marked.setOptions({
-        breaks: true,
-        gfm: true,
-        headerIds: true,
-        mangle: false,
-      })
+    if (!content || !contentRef.current) return
 
-      // Parse markdown to HTML
-      const html = marked.parse(content)
+    // Configure marked options for better rendering
+    marked.setOptions({
+      breaks: true,
+      gfm: true,
+    })
+
+    const renderMarkdown = async () => {
+      const html = await marked.parse(content)
       if (contentRef.current) {
         contentRef.current.innerHTML = html
       }
     }
+
+    renderMarkdown()
   }, [content])
 
   return (

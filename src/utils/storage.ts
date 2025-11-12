@@ -31,8 +31,6 @@ export type Project = {
   updatedAt: string
 }
 
-const STORAGE_KEY = 'docflow-projects'
-
 // Import Supabase storage (will use Supabase if configured, otherwise localStorage)
 import { supabaseStorage } from './supabaseStorage'
 

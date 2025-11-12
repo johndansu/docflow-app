@@ -3,7 +3,7 @@ import { storage } from '../../utils/storage'
 import type { Project } from '../../utils/storage'
 import DocumentViewer from '../DocumentGeneration/DocumentViewer'
 import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
-import { exportToPDF, exportToDOCX, exportToMarkdown } from '../../utils/exportUtils'
+import { exportToPDF } from '../../utils/exportUtils'
 
 interface ProjectDetailProps {
   projectId: string
@@ -71,18 +71,7 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
       ? project.documents[activeDocumentIndex]?.content || project.content
       : project.content
     
-    const format = 'PDF' // Default, could be made selectable
-    switch (format) {
-      case 'PDF':
-        exportToPDF(contentToExport, project.title)
-        break
-      case 'DOCX':
-        exportToDOCX(contentToExport, project.title)
-        break
-      case 'Markdown':
-        exportToMarkdown(contentToExport, project.title)
-        break
-    }
+    exportToPDF(contentToExport, project.title)
   }
 
   if (!project) {

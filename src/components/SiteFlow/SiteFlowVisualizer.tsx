@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { exportSiteFlowAsImage, exportSiteFlowAsJSON, importSiteFlowFromJSON, type SiteFlowData } from '../../utils/siteFlowUtils'
+import { type SiteFlowData } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
 
 interface Node {
@@ -41,8 +41,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
   const [history, setHistory] = useState<SiteFlowData[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showMinimap, setShowMinimap] = useState(true)
+  const [searchQuery] = useState('')
   const canvasRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -128,36 +127,6 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
     } catch (error) {
       console.error('Failed to paste nodes:', error)
     }
-  }
-
-  // Export functions
-  const handleExportImage = async () => {
-    if (canvasContainerRef.current) {
-      try {
-        await exportSiteFlowAsImage(canvasContainerRef.current, 'site-flow')
-      } catch (error) {
-        alert('Failed to export image')
-      }
-    }
-  }
-
-  const handleExportJSON = () => {
-    exportSiteFlowAsJSON({ nodes, connections }, 'site-flow')
-  }
-
-  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    importSiteFlowFromJSON(file)
-      .then((data) => {
-        setNodes(data.nodes)
-        setConnections(data.connections)
-        saveToHistory()
-      })
-      .catch((error) => {
-        alert('Failed to import: ' + error.message)
-      })
   }
 
   // Filtered nodes based on search
@@ -520,7 +489,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           { name: 'Contact', x: centerX + 400, y: centerY },
           { name: 'Services', x: centerX, y: centerY - 300 },
         ]
-        defaultPages.forEach((page, idx) => {
+        defaultPages.forEach((page) => {
           level1Nodes.push({
             id: nodeId.toString(),
             name: page.name,
@@ -955,7 +924,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
       <div className="text-center py-12 text-mid-grey">
         <p className="mb-4">Site flow will be generated automatically from your app description</p>
         <button
-          onClick={(e) => {
+          onClick={() => {
             if (canvasRef.current) {
               const rect = canvasRef.current.getBoundingClientRect()
               addNewNode(rect.width / 2, rect.height / 2)
@@ -1142,7 +1111,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
             </marker>
           </defs>
           <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
-            {connections.map((conn, idx) => {
+            {connections.map((conn) => {
               // Convert connection IDs to strings to match node IDs
               const fromId = String(conn.from)
               const toId = String(conn.to)
@@ -1515,70 +1484,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           </div>
         )}
 
-        {/* Minimap - hidden for simplicity */}
-        {false && showMinimap && nodes.length > 0 && (
-          <div className="absolute bottom-4 right-4 w-48 h-32 bg-dark-card/90 border border-divider/50 rounded-lg p-2 z-40 backdrop-blur-sm">
-            <div className="text-xs text-mid-grey mb-1 font-medium">Minimap ({nodes.length} nodes)</div>
-            <div className="relative w-full h-24 bg-dark-surface rounded border border-divider/30 overflow-hidden">
-              <svg className="absolute inset-0" viewBox="0 0 1000 600" preserveAspectRatio="none">
-                {/* Calculate bounds for minimap */}
-                {(() => {
-                  const allX = nodes.map(n => n.x)
-                  const allY = nodes.map(n => n.y)
-                  const minX = Math.min(...allX, 0)
-                  const maxX = Math.max(...allX, 1000)
-                  const minY = Math.min(...allY, 0)
-                  const maxY = Math.max(...allY, 600)
-                  const scaleX = 1000 / Math.max(maxX - minX, 1000)
-                  const scaleY = 600 / Math.max(maxY - minY, 600)
-                  
-                  return (
-                    <>
-                      {/* Connections */}
-                      {connections.map((conn, idx) => {
-                        const fromNode = nodes.find(n => n.id === conn.from)
-                        const toNode = nodes.find(n => n.id === conn.to)
-                        if (!fromNode || !toNode) return null
-                        return (
-                          <line
-                            key={idx}
-                            x1={(fromNode.x - minX) * scaleX}
-                            y1={(fromNode.y - minY) * scaleY}
-                            x2={(toNode.x - minX) * scaleX}
-                            y2={(toNode.y - minY) * scaleY}
-                            stroke="#9CA3AF"
-                            strokeWidth="0.5"
-                          />
-                        )
-                      })}
-                      {/* Nodes */}
-                      {nodes.map((node) => (
-                        <circle
-                          key={node.id}
-                          cx={(node.x - minX) * scaleX}
-                          cy={(node.y - minY) * scaleY}
-                          r={node.level === 0 ? 3 : 2}
-                          fill={selectedNodes.has(node.id) ? '#D9A441' : node.level === 0 ? '#D9A441' : '#9CA3AF'}
-                        />
-                      ))}
-                    </>
-                  )
-                })()}
-                {/* Viewport indicator */}
-                <rect
-                  x={(-panOffset.x / zoom) * 0.1}
-                  y={(-panOffset.y / zoom) * 0.1}
-                  width={(600 / zoom) * 0.1}
-                  height={(400 / zoom) * 0.1}
-                  fill="none"
-                  stroke="#D9A441"
-                  strokeWidth="1"
-                  strokeDasharray="2 2"
-                />
-              </svg>
-            </div>
-          </div>
-        )}
+        {/* Minimap placeholder removed for simplicity */}
       </div>
 
       {/* Simple Instructions */}

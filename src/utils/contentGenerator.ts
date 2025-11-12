@@ -19,7 +19,6 @@ export const extractInfo = (description: string): ExtractedInfo => {
   const projectName = lines[0]?.substring(0, 50) || 'Untitled Project'
   
   const descriptionLower = description.toLowerCase()
-  const words = description.split(/\s+/)
   
   // Extract features (lines starting with -, *, or containing keywords)
   const features: string[] = []
