@@ -756,6 +756,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b)
     const maxLevel = sortedLevels[sortedLevels.length - 1] ?? 0
     const columnWidth = maxLevel > 0 ? (availableWidth - padding * 2) / maxLevel : 0
+    const maxHorizontalOffset = columnWidth * 0.38
     const basePositions = new Map<string, { x: number; y: number }>()
 
     sortedLevels.forEach((level) => {
@@ -820,7 +821,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         const newY = node.y + fy * damping
 
         if (base) {
-          const maxHorizontalOffset = columnWidth * 0.38
           const clampedX = Math.max(base.x - maxHorizontalOffset, Math.min(base.x + maxHorizontalOffset, newX))
           node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
         } else {
@@ -847,7 +847,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
           const base = basePositions.get(node.id)
           if (base) {
-            const maxHorizontalOffset = columnWidth * 0.38
             const targetX = node.x - pushX
             const clampedX = Math.max(base.x - maxHorizontalOffset, Math.min(base.x + maxHorizontalOffset, targetX))
             node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
