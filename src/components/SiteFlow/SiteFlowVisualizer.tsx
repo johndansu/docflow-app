@@ -763,8 +763,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       const nodesAtLevel = nodesByLevel.get(level) || []
       if (nodesAtLevel.length === 0) return
 
-      const usableHeight = Math.max(availableHeight - padding * 2, 200)
-      const lane = usableHeight / (nodesAtLevel.length + 1)
+      const usableHeight = Math.max(availableHeight - padding * 2, 400)
+      const lane = Math.max(usableHeight / (nodesAtLevel.length + 0.75), 160)
       const startY = padding + lane
 
       nodesAtLevel.forEach((node, index) => {
@@ -782,12 +782,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       return { ...node, x: padding, y: availableHeight / 2 }
     })
 
-    const minNodeDistance = Math.min(availableWidth, availableHeight) * 0.12
+    const minNodeDistance = Math.min(availableWidth, availableHeight) * 0.18
 
     // Apply force-directed spacing to prevent overlaps - enhanced algorithm
     const finalNodes = initialNodes.map(node => ({ ...node }))
-    const iterations = 25
-    const damping = 0.28
+    const iterations = 30
+    const damping = 0.32
     const nodeWidth = 200
     const nodeHeight = 80
 
@@ -806,11 +806,11 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
           if (distance < actualMinDistance) {
             const overlap = actualMinDistance - distance
-            const force = (overlap / actualMinDistance) * 55
+            const force = (overlap / actualMinDistance) * 65
             fx -= (dx / distance) * force
             fy -= (dy / distance) * force
-          } else if (distance < actualMinDistance * 1.5) {
-            const force = ((actualMinDistance * 1.5 - distance) / actualMinDistance) * 12
+          } else if (distance < actualMinDistance * 1.6) {
+            const force = ((actualMinDistance * 1.6 - distance) / actualMinDistance) * 14
             fx -= (dx / distance) * force
             fy -= (dy / distance) * force
           }
