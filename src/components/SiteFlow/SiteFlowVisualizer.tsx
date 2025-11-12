@@ -762,12 +762,13 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       const nodesAtLevel = nodesByLevel.get(level) || []
       if (nodesAtLevel.length === 0) return
 
-      const verticalSpacing = (availableHeight - padding * 2) / Math.max(nodesAtLevel.length, 1)
+      const usableHeight = Math.max(availableHeight - padding * 2, 200)
+      const lane = usableHeight / (nodesAtLevel.length + 1)
+      const startY = padding + lane
+
       nodesAtLevel.forEach((node, index) => {
         const x = padding + columnWidth * level
-        const y = nodesAtLevel.length === 1
-          ? availableHeight / 2
-          : padding + verticalSpacing / 2 + index * verticalSpacing
+        const y = startY + index * lane
         basePositions.set(node.id, { x, y })
       })
     })
@@ -819,8 +820,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         const newY = node.y + fy * damping
 
         if (base) {
-          const maxOffset = columnWidth * 0.25
-          const clampedX = Math.max(base.x - maxOffset, Math.min(base.x + maxOffset, newX))
+          const maxHorizontalOffset = columnWidth * 0.38
+          const clampedX = Math.max(base.x - maxHorizontalOffset, Math.min(base.x + maxHorizontalOffset, newX))
           node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
         } else {
           node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, newX))
@@ -846,9 +847,9 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
           const base = basePositions.get(node.id)
           if (base) {
-            const maxOffset = columnWidth * 0.25
+            const maxHorizontalOffset = columnWidth * 0.38
             const targetX = node.x - pushX
-            const clampedX = Math.max(base.x - maxOffset, Math.min(base.x + maxOffset, targetX))
+            const clampedX = Math.max(base.x - maxHorizontalOffset, Math.min(base.x + maxHorizontalOffset, targetX))
             node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
           } else {
             node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, node.x - pushX))
@@ -857,9 +858,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
           const otherBase = basePositions.get(otherNode.id)
           if (otherBase) {
-            const maxOffsetOther = columnWidth * 0.25
             const targetOtherX = otherNode.x + pushX
-            const clampedOtherX = Math.max(otherBase.x - maxOffsetOther, Math.min(otherBase.x + maxOffsetOther, targetOtherX))
+            const clampedOtherX = Math.max(otherBase.x - maxHorizontalOffset, Math.min(otherBase.x + maxHorizontalOffset, targetOtherX))
             otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedOtherX))
           } else {
             otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, otherNode.x + pushX))
