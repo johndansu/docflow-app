@@ -747,7 +747,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const canvasHeight = rect.height
     const targetZoom = 0.3
     const availableWidth = WORKSPACE_WIDTH
-    const availableHeight = WORKSPACE_HEIGHT
     const padding = 200
 
     const nodesById = new Map<string, Node>(nodes.map(node => [String(node.id), node]))
