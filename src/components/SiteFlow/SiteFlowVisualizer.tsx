@@ -740,8 +740,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     
     // Calculate available space at 50% zoom
     const availableWidth = canvasWidth / targetZoom
-    const availableHeight = canvasHeight / targetZoom
-    
     const padding = 200
     const nodesById = new Map<string, Node>(nodes.map(node => [String(node.id), node]))
     const childMap = new Map<string, string[]>()
