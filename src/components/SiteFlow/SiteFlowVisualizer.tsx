@@ -28,11 +28,11 @@ export interface SiteFlowHandle {
   getCurrentSiteFlow: () => SiteFlowData | null
 }
 
-const NODE_WIDTH = 220
-const NODE_HEIGHT = 90
-const ARROW_OFFSET = 14
-const VERTICAL_GAP = 220
-const MIN_COLUMN_GAP = 260
+const NODE_WIDTH = 260
+const NODE_HEIGHT = 110
+const ARROW_OFFSET = 18
+const VERTICAL_GAP = 260
+const MIN_COLUMN_GAP = 320
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -43,7 +43,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [nodes, setNodes] = useState<Node[]>(initialSiteFlow?.nodes || [])
   const [connections, setConnections] = useState<Connection[]>(initialSiteFlow?.connections || [])
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
-  const [zoom, setZoom] = useState(0.5) // Default to 50% zoom
+  const [zoom, setZoom] = useState(0.3) // Default to 30% zoom
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
@@ -745,7 +745,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const centerView = () => {
     if (nodes.length === 0 || !canvasRef.current) return
 
-    const rect = canvasRef.current.getBoundingClientRect()
+      const rect = canvasRef.current.getBoundingClientRect()
     const canvasWidth = rect.width
     const canvasHeight = rect.height
     const targetZoom = 0.5
@@ -768,7 +768,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
     const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
     const horizontalGap = Math.max((availableWidth - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
-
     const positions = new Map<string, { x: number; y: number }>()
     const visited = new Set<string>()
     let nextY = padding
@@ -813,12 +812,14 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const orderedRoots = roots.length > 0 ? roots : nodes.slice(0, 1)
     orderedRoots.forEach(root => {
       assign(String(root.id), root.level ?? 0)
+      nextY += VERTICAL_GAP
     })
 
     nodes.forEach(node => {
       const id = String(node.id)
       if (!visited.has(id)) {
         assign(id, node.level ?? 0)
+        nextY += VERTICAL_GAP
       }
     })
 
@@ -1159,26 +1160,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             })}
           </g>
         </svg>
-
-        {/* Zoom Slider */}
-        <div className="absolute top-1/2 right-6 -translate-y-1/2 z-40 bg-dark-card/85 border border-divider/40 rounded-xl px-3 py-4 flex flex-col items-center gap-3 shadow-lg">
-          <span className="text-[10px] uppercase tracking-[0.35em] text-mid-grey">Zoom</span>
-          <input
-            type="range"
-            min={0.3}
-            max={1.5}
-            step={0.05}
-            value={zoom}
-            onChange={(e) => handleZoomSliderChange(parseFloat(e.target.value))}
-            className="slider-thumb w-2 h-40"
-            style={{
-              writingMode: 'vertical-rl',
-              WebkitAppearance: 'slider-vertical',
-              transform: 'rotate(180deg)'
-            }}
-          />
-          <span className="text-xs text-mid-grey">{Math.round(zoom * 100)}%</span>
-        </div>
 
         {/* Nodes - render on top of connections */}
         <div style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'relative', width: '100%', height: '100%', zIndex: 1 }}>
