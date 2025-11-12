@@ -33,6 +33,8 @@ const NODE_HEIGHT = 110
 const ARROW_OFFSET = 18
 const VERTICAL_GAP = 260
 const MIN_COLUMN_GAP = 320
+const WORKSPACE_WIDTH = 2800
+const WORKSPACE_HEIGHT = 1800
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -913,7 +915,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       {/* Canvas */}
       <div
         ref={canvasRef}
-        className="flex-1 relative overflow-hidden rounded-lg border border-divider/50"
+        className="flex-1 relative rounded-lg border border-divider/50 overflow-auto"
         style={{
           backgroundImage: `
             linear-gradient(to right, #2A2A2A 1px, transparent 1px),
@@ -922,6 +924,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
           backgroundColor: '#121212',
           cursor: isPanning ? 'grabbing' : connectingFrom ? 'crosshair' : 'default',
+          minHeight: WORKSPACE_HEIGHT,
+          minWidth: '100%'
         }}
         onMouseDown={handleCanvasMouseDown}
         onClick={(e) => {
@@ -938,7 +942,11 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           e.preventDefault()
         }}
       >
-        <div ref={canvasContainerRef} className="w-full h-full relative">
+        <div
+          ref={canvasContainerRef}
+          className="relative"
+          style={{ width: WORKSPACE_WIDTH, height: WORKSPACE_HEIGHT }}
+        >
         {/* SVG for connections - render behind nodes */}
         <svg 
           className="absolute inset-0 z-0" 
