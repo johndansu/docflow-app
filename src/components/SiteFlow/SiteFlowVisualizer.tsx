@@ -742,137 +742,103 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const availableWidth = canvasWidth / targetZoom
     const availableHeight = canvasHeight / targetZoom
     
-    // Natural spacing algorithm - position nodes organically based on levels and connections
     const padding = 200
-    const nodesByLevel = new Map<number, Node[]>()
-    nodes.forEach(node => {
-      const level = node.level ?? 0
-      if (!nodesByLevel.has(level)) {
-        nodesByLevel.set(level, [])
+    const nodesById = new Map<string, Node>(nodes.map(node => [String(node.id), node]))
+    const childMap = new Map<string, string[]>()
+    const incomingCount = new Map<string, number>()
+
+    connections.forEach(({ from, to }) => {
+      const fromId = String(from)
+      const toId = String(to)
+      if (!childMap.has(fromId)) {
+        childMap.set(fromId, [])
       }
-      nodesByLevel.get(level)!.push(node)
+      childMap.get(fromId)!.push(toId)
+      incomingCount.set(toId, (incomingCount.get(toId) ?? 0) + 1)
     })
 
-    const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b)
-    const maxLevel = sortedLevels[sortedLevels.length - 1] ?? 0
-    const columnWidth = maxLevel > 0 ? (availableWidth - padding * 2) / maxLevel : 0
-    const maxHorizontalOffset = columnWidth * 0.38
-    const basePositions = new Map<string, { x: number; y: number }>()
+    const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
+    const horizontalGap = Math.max((availableWidth - padding * 2) / Math.max(maxDepth, 1), 260)
+    const verticalGap = 200
 
-    sortedLevels.forEach((level) => {
-      const nodesAtLevel = nodesByLevel.get(level) || []
-      if (nodesAtLevel.length === 0) return
+    const positions = new Map<string, { x: number; y: number }>()
+    const visited = new Set<string>()
+    let currentY = padding
 
-      const usableHeight = Math.max(availableHeight - padding * 2, 400)
-      const lane = Math.max(usableHeight / (nodesAtLevel.length + 0.75), 160)
-      const startY = padding + lane
-
-      nodesAtLevel.forEach((node, index) => {
-        const x = padding + columnWidth * level
-        const y = startY + index * lane
-        basePositions.set(node.id, { x, y })
-      })
-    })
-
-    const initialNodes = nodes.map(node => {
-      const base = basePositions.get(node.id)
-      if (base) {
-        return { ...node, x: base.x, y: base.y }
+    const layoutNode = (id: string, depth: number): number => {
+      if (visited.has(id)) {
+        return positions.get(id)?.y ?? currentY
       }
-      return { ...node, x: padding, y: availableHeight / 2 }
-    })
+      visited.add(id)
 
-    const minNodeDistance = Math.min(availableWidth, availableHeight) * 0.18
+      const node = nodesById.get(id)
+      if (!node) {
+        return currentY
+      }
 
-    // Apply force-directed spacing to prevent overlaps - enhanced algorithm
-    const finalNodes = initialNodes.map(node => ({ ...node }))
-    const iterations = 30
-    const damping = 0.32
-    const nodeWidth = 200
-    const nodeHeight = 80
+      const children = childMap.get(id) ?? []
+      const depthLevel = node.level ?? depth
+      const x = padding + depthLevel * horizontalGap
 
-    for (let i = 0; i < iterations; i++) {
-      finalNodes.forEach((node, idx) => {
-        let fx = 0, fy = 0
+      if (children.length === 0) {
+        const y = currentY
+        positions.set(id, { x, y })
+        currentY += verticalGap
+        return y
+      }
 
-        finalNodes.forEach((otherNode, otherIdx) => {
-          if (idx === otherIdx) return
-
-          const dx = otherNode.x - node.x
-          const dy = otherNode.y - node.y
-          const distance = Math.sqrt(dx * dx + dy * dy) || 0.1
-
-          const actualMinDistance = minNodeDistance + Math.max(nodeWidth, nodeHeight) / 2
-
-          if (distance < actualMinDistance) {
-            const overlap = actualMinDistance - distance
-            const force = (overlap / actualMinDistance) * 65
-            fx -= (dx / distance) * force
-            fy -= (dy / distance) * force
-          } else if (distance < actualMinDistance * 1.6) {
-            const force = ((actualMinDistance * 1.6 - distance) / actualMinDistance) * 14
-            fx -= (dx / distance) * force
-            fy -= (dy / distance) * force
-          }
-        })
-
-        const base = basePositions.get(node.id)
-        const newX = node.x + fx * damping
-        const newY = node.y + fy * damping
-
-        if (base) {
-          const clampedX = Math.max(base.x - maxHorizontalOffset, Math.min(base.x + maxHorizontalOffset, newX))
-          node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
-        } else {
-          node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, newX))
-        }
-        node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, newY))
+      const childYs: number[] = []
+      children.forEach(childId => {
+        const child = nodesById.get(childId)
+        if (!child) return
+        const childDepth = child.level ?? depthLevel + 1
+        const childY = layoutNode(childId, childDepth)
+        childYs.push(childY)
       })
+
+      let y: number
+      if (childYs.length > 0) {
+        const minChild = Math.min(...childYs)
+        const maxChild = Math.max(...childYs)
+        y = (minChild + maxChild) / 2
+      } else {
+        y = currentY
+        currentY += verticalGap
+      }
+
+      positions.set(id, { x, y })
+      return y
     }
 
-    // Final pass: resolve remaining overlaps directly
-    finalNodes.forEach((node, idx) => {
-      finalNodes.forEach((otherNode, otherIdx) => {
-        if (idx === otherIdx) return
-
-        const dx = otherNode.x - node.x
-        const dy = otherNode.y - node.y
-        const distance = Math.sqrt(dx * dx + dy * dy) || 0.1
-        const actualMinDistance = minNodeDistance + Math.max(nodeWidth, nodeHeight) / 2
-
-        if (distance < actualMinDistance) {
-          const pushDistance = (actualMinDistance - distance) / 2
-          const pushX = (dx / distance) * pushDistance
-          const pushY = (dy / distance) * pushDistance
-
-          const base = basePositions.get(node.id)
-          if (base) {
-            const targetX = node.x - pushX
-            const clampedX = Math.max(base.x - maxHorizontalOffset, Math.min(base.x + maxHorizontalOffset, targetX))
-            node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedX))
-          } else {
-            node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, node.x - pushX))
-          }
-          node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, node.y - pushY))
-
-          const otherBase = basePositions.get(otherNode.id)
-          if (otherBase) {
-            const targetOtherX = otherNode.x + pushX
-            const clampedOtherX = Math.max(otherBase.x - maxHorizontalOffset, Math.min(otherBase.x + maxHorizontalOffset, targetOtherX))
-            otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, clampedOtherX))
-          } else {
-            otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, otherNode.x + pushX))
-          }
-          otherNode.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, otherNode.y + pushY))
-        }
-      })
+    const roots = nodes.filter(node => {
+      const nodeId = String(node.id)
+      return (node.level ?? 0) === 0 || (incomingCount.get(nodeId) ?? 0) === 0
     })
 
-    setNodes(finalNodes)
+    const orderedRoots = roots.length > 0 ? roots : nodes.slice(0, 1)
+    orderedRoots.forEach(root => {
+      layoutNode(String(root.id), root.level ?? 0)
+      currentY += verticalGap
+    })
 
-    // Center the nodes in view at 50% zoom
-    const allX = finalNodes.map(n => n.x)
-    const allY = finalNodes.map(n => n.y)
+    nodes.forEach(node => {
+      const nodeId = String(node.id)
+      if (!visited.has(nodeId)) {
+        layoutNode(nodeId, node.level ?? 0)
+        currentY += verticalGap
+      }
+    })
+
+    const laidOutNodes = nodes.map(node => {
+      const pos = positions.get(String(node.id))
+      if (!pos) return node
+      return { ...node, x: pos.x, y: pos.y }
+    })
+
+    setNodes(laidOutNodes)
+
+    const allX = laidOutNodes.map(n => n.x)
+    const allY = laidOutNodes.map(n => n.y)
     const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
     const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
 
@@ -880,7 +846,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       x: canvasWidth / 2 - centerNodeX * targetZoom,
       y: canvasHeight / 2 - centerNodeY * targetZoom
     })
-    setZoom(targetZoom) // 50% zoom with naturally spaced nodes
+    setZoom(targetZoom)
   }
 
   // Track if we've auto-fitted for current node set
