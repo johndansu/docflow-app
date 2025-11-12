@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { type SiteFlowData } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
 
@@ -55,70 +55,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const editInputRef = useRef<HTMLInputElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
-  const showMinimap = true
-
-  const minimapData = useMemo(() => {
-    if (nodes.length === 0) return null
-    const xs = nodes.map((n) => n.x)
-    const ys = nodes.map((n) => n.y)
-    const minX = Math.min(...xs)
-    const maxX = Math.max(...xs)
-    const minY = Math.min(...ys)
-    const maxY = Math.max(...ys)
-    const width = Math.max(maxX - minX, 1)
-    const height = Math.max(maxY - minY, 1)
-    return { minX, maxX, minY, maxY, width, height }
-  }, [nodes])
-
-  const minimapComputed = useMemo(() => {
-    if (!minimapData) return null
-    const MINIMAP_WIDTH = 160
-    const MINIMAP_HEIGHT = 110
-    const padding = 8
-    const scaleX = (MINIMAP_WIDTH - padding * 2) / minimapData.width
-    const scaleY = (MINIMAP_HEIGHT - padding * 2) / minimapData.height
-
-    const nodePositions = nodes.map((node) => {
-      const x = (node.x - minimapData.minX) * scaleX + padding
-      const y = (node.y - minimapData.minY) * scaleY + padding
-      return { id: node.id, x, y, level: node.level }
-    })
-
-    const nodeMap = new Map<string, { x: number; y: number }>()
-    nodePositions.forEach((pos) => {
-      nodeMap.set(pos.id, { x: pos.x, y: pos.y })
-    })
-
-    return {
-      width: MINIMAP_WIDTH,
-      height: MINIMAP_HEIGHT,
-      padding,
-      scaleX,
-      scaleY,
-      data: minimapData,
-      nodes: nodePositions,
-      nodeMap,
-    }
-  }, [minimapData, nodes])
-
-  const minimapViewport = useMemo(() => {
-    if (!minimapComputed || !canvasRef.current || zoom <= 0) return null
-    const { data, scaleX, scaleY, padding, width: mmWidth, height: mmHeight } = minimapComputed
-    const rect = canvasRef.current.getBoundingClientRect()
-    const viewX = -panOffset.x / zoom
-    const viewY = -panOffset.y / zoom
-    const viewWidth = rect.width / zoom
-    const viewHeight = rect.height / zoom
-
-    const rawX = (viewX - data.minX) * scaleX + padding
-    const rawY = (viewY - data.minY) * scaleY + padding
-    const width = Math.max(Math.min(viewWidth * scaleX, mmWidth - padding * 2), 10)
-    const height = Math.max(Math.min(viewHeight * scaleY, mmHeight - padding * 2), 10)
-    const x = Math.min(Math.max(rawX, padding), mmWidth - padding - width)
-    const y = Math.min(Math.max(rawY, padding), mmHeight - padding - height)
-
-    return { x, y, width, height }
-  }, [minimapComputed, panOffset, zoom])
 
   useImperativeHandle(ref, () => ({
     getCurrentSiteFlow: () => latestSiteFlowRef.current,
@@ -1158,7 +1094,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
               markerHeight="18"
               refX="15"
               refY="6"
-              orient="auto"
+              orient="auto-start-reverse"
               markerUnits="userSpaceOnUse"
             >
               <path
@@ -1175,7 +1111,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
               markerHeight="20"
               refX="17"
               refY="7"
-              orient="auto"
+              orient="auto-start-reverse"
               markerUnits="userSpaceOnUse"
             >
               <path
@@ -1266,6 +1202,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className="pointer-events-auto cursor-pointer"
+                    markerStart={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
+                    markerEnd={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
                     onClick={(e) => {
                       e.stopPropagation()
                       if (e.detail === 2) {
@@ -1462,77 +1400,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         </div>
         </div>
 
-        {showMinimap && minimapComputed && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-dark-card/95 border border-divider/40 rounded-xl shadow-lg px-5 py-4 z-40 backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-medium uppercase tracking-[0.25em] text-mid-grey">Overview</span>
-              <span className="text-[10px] text-mid-grey/70">{nodes.length} pages</span>
-            </div>
-            <svg
-              width={minimapComputed.width}
-              height={minimapComputed.height}
-              className="rounded-lg bg-[#0D0D0D] border border-divider/40"
-            >
-              <defs>
-                <linearGradient id="mini-conn" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#475569" stopOpacity="0.45" />
-                  <stop offset="50%" stopColor="#94A3B8" stopOpacity="0.55" />
-                  <stop offset="100%" stopColor="#475569" stopOpacity="0.45" />
-                </linearGradient>
-              </defs>
-              <rect
-                x={0}
-                y={0}
-                width={minimapComputed.width}
-                height={minimapComputed.height}
-                rx={8}
-                fill="#0D0D0D"
-              />
-              {connections.map((conn, idx) => {
-                const fromPos = minimapComputed.nodeMap.get(conn.from)
-                const toPos = minimapComputed.nodeMap.get(conn.to)
-                if (!fromPos || !toPos) return null
-                return (
-                  <line
-                    key={`mini-conn-${idx}`}
-                    x1={fromPos.x}
-                    y1={fromPos.y}
-                    x2={toPos.x}
-                    y2={toPos.y}
-                    stroke="url(#mini-conn)"
-                    strokeWidth={1}
-                    strokeLinecap="round"
-                    strokeOpacity={0.65}
-                  />
-                )
-              })}
-              {minimapComputed.nodes.map((node) => (
-                <circle
-                  key={`mini-node-${node.id}`}
-                  cx={node.x}
-                  cy={node.y}
-                  r={node.level === 0 ? 4.5 : 3.5}
-                  fill={node.level === 0 ? '#FBBF24' : '#E2E8F0'}
-                  stroke="rgba(15,23,42,0.7)"
-                  strokeWidth={1}
-                />
-              ))}
-              {minimapViewport && (
-                <rect
-                  x={minimapViewport.x}
-                  y={minimapViewport.y}
-                  width={minimapViewport.width}
-                  height={minimapViewport.height}
-                  rx={3}
-                  fill="rgba(251,191,36,0.12)"
-                  stroke="#FBBF24"
-                  strokeWidth={1.2}
-                />
-              )}
-            </svg>
-          </div>
-        )}
-
         {/* Context Menu */}
         {contextMenu && (
           <div
@@ -1639,7 +1506,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
       {/* Simple Instructions */}
       <div className="mt-2 text-xs text-mid-grey text-center">
-        Double-click nodes to edit • Right-click for menu • Scroll or two-finger drag to pan • Hold Ctrl/Cmd and scroll (or use a mouse wheel) to zoom • Use the minimap for quick navigation
+        Double-click nodes to edit • Right-click for menu • Scroll or two-finger drag to pan • Hold Ctrl/Cmd and scroll (or use a mouse wheel) to zoom
       </div>
     </div>
   )
