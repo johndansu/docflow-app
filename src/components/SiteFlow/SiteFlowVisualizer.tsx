@@ -1172,7 +1172,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             onChange={(e) => handleZoomSliderChange(parseFloat(e.target.value))}
             className="slider-thumb w-2 h-40"
             style={{
-              writingMode: 'bt-lr',
+              writingMode: 'vertical-rl',
               WebkitAppearance: 'slider-vertical',
               transform: 'rotate(180deg)'
             }}
