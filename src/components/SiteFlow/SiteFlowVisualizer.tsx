@@ -28,6 +28,12 @@ export interface SiteFlowHandle {
   getCurrentSiteFlow: () => SiteFlowData | null
 }
 
+const NODE_WIDTH = 220
+const NODE_HEIGHT = 90
+const ARROW_OFFSET = 14
+const VERTICAL_GAP = 220
+const MIN_COLUMN_GAP = 260
+
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
   prdContent,
@@ -725,22 +731,27 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }
 
   const handleZoom = (delta: number) => {
-    setZoom(prev => Math.max(0.5, Math.min(2, prev + delta)))
+    setZoom(prev => {
+      const next = Math.max(0.3, Math.min(1.5, prev + delta))
+      return parseFloat(next.toFixed(2))
+    })
+  }
+
+  const handleZoomSliderChange = (value: number) => {
+    const clamped = Math.max(0.3, Math.min(1.5, value))
+    setZoom(parseFloat(clamped.toFixed(2)))
   }
 
   const centerView = () => {
     if (nodes.length === 0 || !canvasRef.current) return
-    
-      const rect = canvasRef.current.getBoundingClientRect()
+
+    const rect = canvasRef.current.getBoundingClientRect()
     const canvasWidth = rect.width
     const canvasHeight = rect.height
-    
-    // Set zoom to 50%
     const targetZoom = 0.5
-    
-    // Calculate available space at 50% zoom
     const availableWidth = canvasWidth / targetZoom
     const padding = 200
+
     const nodesById = new Map<string, Node>(nodes.map(node => [String(node.id), node]))
     const childMap = new Map<string, string[]>()
     const incomingCount = new Map<string, number>()
@@ -756,54 +767,40 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
-    const horizontalGap = Math.max((availableWidth - padding * 2) / Math.max(maxDepth, 1), 260)
-    const verticalGap = 200
+    const horizontalGap = Math.max((availableWidth - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
 
     const positions = new Map<string, { x: number; y: number }>()
     const visited = new Set<string>()
-    let currentY = padding
+    let nextY = padding
 
-    const layoutNode = (id: string, depth: number): number => {
+    const assign = (id: string, depth: number): number => {
       if (visited.has(id)) {
-        return positions.get(id)?.y ?? currentY
+        return positions.get(id)?.y ?? nextY
       }
       visited.add(id)
 
       const node = nodesById.get(id)
       if (!node) {
-        return currentY
+        const yFallback = nextY
+        nextY += VERTICAL_GAP
+        return yFallback
       }
 
-      const children = childMap.get(id) ?? []
-      const depthLevel = node.level ?? depth
-      const x = padding + depthLevel * horizontalGap
+      const level = node.level ?? depth
+      const x = padding + level * horizontalGap
+      const children = (childMap.get(id) ?? []).filter(childId => nodesById.has(childId))
 
       if (children.length === 0) {
-        const y = currentY
+        const y = nextY
         positions.set(id, { x, y })
-        currentY += verticalGap
+        nextY += VERTICAL_GAP
         return y
       }
 
-      const childYs: number[] = []
-      children.forEach(childId => {
-        const child = nodesById.get(childId)
-        if (!child) return
-        const childDepth = child.level ?? depthLevel + 1
-        const childY = layoutNode(childId, childDepth)
-        childYs.push(childY)
-      })
-
-      let y: number
-      if (childYs.length > 0) {
-        const minChild = Math.min(...childYs)
-        const maxChild = Math.max(...childYs)
-        y = (minChild + maxChild) / 2
-      } else {
-        y = currentY
-        currentY += verticalGap
-      }
-
+      const childYs = children.map(childId => assign(childId, level + 1))
+      const minY = Math.min(...childYs)
+      const maxY = Math.max(...childYs)
+      const y = (minY + maxY) / 2
       positions.set(id, { x, y })
       return y
     }
@@ -815,28 +812,26 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
     const orderedRoots = roots.length > 0 ? roots : nodes.slice(0, 1)
     orderedRoots.forEach(root => {
-      layoutNode(String(root.id), root.level ?? 0)
-      currentY += verticalGap
+      assign(String(root.id), root.level ?? 0)
     })
 
     nodes.forEach(node => {
-      const nodeId = String(node.id)
-      if (!visited.has(nodeId)) {
-        layoutNode(nodeId, node.level ?? 0)
-        currentY += verticalGap
+      const id = String(node.id)
+      if (!visited.has(id)) {
+        assign(id, node.level ?? 0)
       }
     })
 
-    const laidOutNodes = nodes.map(node => {
+    const laidOut = nodes.map(node => {
       const pos = positions.get(String(node.id))
       if (!pos) return node
       return { ...node, x: pos.x, y: pos.y }
     })
 
-    setNodes(laidOutNodes)
+    setNodes(laidOut)
 
-    const allX = laidOutNodes.map(n => n.x)
-    const allY = laidOutNodes.map(n => n.y)
+    const allX = laidOut.map(n => n.x)
+    const allY = laidOut.map(n => n.y)
     const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
     const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
 
@@ -879,7 +874,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }
 
   return (
-    <div className="flex flex-col relative" style={{ height: '600px' }}>
+    <div className="flex flex-col relative" style={{ height: '80vh' }}>
       {/* Simple Toolbar */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
@@ -944,24 +939,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           }
         }}
         onWheel={(e) => {
-          // Only zoom with Ctrl/Cmd + wheel
-          // Trackpad gestures have small deltas (< 50), mouse wheel has larger jumps
-          const isZoomGesture = e.ctrlKey || e.metaKey
-          const isMouseWheel = Math.abs(e.deltaY) > 50
-          
-          if (isZoomGesture || isMouseWheel) {
-            // Zoom gesture
           e.preventDefault()
-          const delta = e.deltaY > 0 ? -0.1 : 0.1
-          handleZoom(delta)
-          } else {
-            // Trackpad scroll - pan the canvas
-            e.preventDefault()
-            setPanOffset(prev => ({
-              x: prev.x - e.deltaX,
-              y: prev.y - e.deltaY
-            }))
-          }
         }}
       >
         <div ref={canvasContainerRef} className="w-full h-full relative">
@@ -1072,35 +1050,21 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
               if (!fromVisible || !toVisible) return null
 
               // Calculate connection points
-              const nodeWidth = fromNode.isParent ? 200 : 180
-              const nodeHeight = 60
-              const fromX = fromNode.x + nodeWidth / 2
-              const fromY = fromNode.y + nodeHeight
-              const toNodeWidth = toNode.isParent ? 200 : 180
-              const toX = toNode.x + toNodeWidth / 2
-              const toY = toNode.y
+              const fromCenterY = fromNode.y + NODE_HEIGHT / 2
+              const toCenterY = toNode.y + NODE_HEIGHT / 2
+              const fromX = fromNode.x + NODE_WIDTH - ARROW_OFFSET
+              const toX = toNode.x + ARROW_OFFSET
+              const fromY = fromCenterY
+              const toY = toCenterY
 
-              // Improved smooth curved path
-              const dx = toX - fromX
-              const dy = toY - fromY
-              const distance = Math.sqrt(dx * dx + dy * dy)
-              
-              // Dynamic curvature based on distance
-              const baseCurvature = Math.min(distance * 0.25, 120)
-              const curvature = baseCurvature * (1 + Math.sin(distance / 100) * 0.2)
-              
-              const midX = (fromX + toX) / 2
-              const midY = (fromY + toY) / 2
-              
-              // Perpendicular direction for smooth curve
-              const perpX = -dy / distance * curvature
-              const perpY = dx / distance * curvature
-              
-              const controlX = midX + perpX
-              const controlY = midY + perpY
-              
-              // Use quadratic bezier for smooth, natural curves
-              const path = `M ${fromX} ${fromY} Q ${controlX} ${controlY} ${toX} ${toY}`
+              const span = Math.max(toX - fromX, 40)
+              const controlOffset = Math.max(span * 0.4, 80)
+              const control1X = fromX + controlOffset
+              const control2X = toX - controlOffset
+              const control1Y = fromY
+              const control2Y = toY
+
+              const path = `M ${fromX} ${fromY} C ${control1X} ${control1Y} ${control2X} ${control2Y} ${toX} ${toY}`
 
               const isSelected = selectedNodes.has(conn.from) || selectedNodes.has(conn.to)
 
@@ -1127,7 +1091,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className="pointer-events-auto cursor-pointer"
-                    markerStart={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
                     markerEnd={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
                     onClick={(e) => {
                       e.stopPropagation()
@@ -1197,6 +1160,26 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           </g>
         </svg>
 
+        {/* Zoom Slider */}
+        <div className="absolute top-1/2 right-6 -translate-y-1/2 z-40 bg-dark-card/85 border border-divider/40 rounded-xl px-3 py-4 flex flex-col items-center gap-3 shadow-lg">
+          <span className="text-[10px] uppercase tracking-[0.35em] text-mid-grey">Zoom</span>
+          <input
+            type="range"
+            min={0.3}
+            max={1.5}
+            step={0.05}
+            value={zoom}
+            onChange={(e) => handleZoomSliderChange(parseFloat(e.target.value))}
+            className="slider-thumb w-2 h-40"
+            style={{
+              writingMode: 'bt-lr',
+              WebkitAppearance: 'slider-vertical',
+              transform: 'rotate(180deg)'
+            }}
+          />
+          <span className="text-xs text-mid-grey">{Math.round(zoom * 100)}%</span>
+        </div>
+
         {/* Nodes - render on top of connections */}
         <div style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'relative', width: '100%', height: '100%', zIndex: 1 }}>
           {filteredNodes.length === 0 && searchQuery ? (
@@ -1263,7 +1246,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   : isHighlighted
                   ? 'border-2 border-amber-gold/50 bg-amber-gold/10'
                   : 'border-divider'
-              }`} style={{ width: node.isParent ? '200px' : '180px' }}>
+              }`} style={{ width: `${NODE_WIDTH}px` }}>
                 {editingNode === node.id && editingField === 'name' ? (
                   <input
                     ref={editInputRef}
@@ -1431,7 +1414,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
       {/* Simple Instructions */}
       <div className="mt-2 text-xs text-mid-grey text-center">
-        Double-click nodes to edit • Right-click for menu • Scroll or two-finger drag to pan • Hold Ctrl/Cmd and scroll (or use a mouse wheel) to zoom
+        Double-click nodes to edit • Right-click for menu • Drag canvas to pan • Use the side slider to zoom in/out
       </div>
     </div>
   )
