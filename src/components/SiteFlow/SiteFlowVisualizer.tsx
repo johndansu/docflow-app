@@ -957,237 +957,13 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           className="relative"
           style={{ width: workspaceSize.width, height: workspaceSize.height }}
         >
-        {/* SVG for connections - render behind nodes */}
-        <svg 
-          className="absolute inset-0 z-0" 
-          width={workspaceSize.width}
-          height={workspaceSize.height}
-          style={{ width: workspaceSize.width, height: workspaceSize.height, zIndex: 0, overflow: 'visible', pointerEvents: 'none' }}
-        >
-          <defs>
-            {/* Supabase-style animated gradients - flowing effect */}
-            <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#6B7280" stopOpacity="0.4">
-                <animate attributeName="stop-opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite" />
-              </stop>
-              <stop offset="50%" stopColor="#9CA3AF" stopOpacity="1">
-                <animate attributeName="stop-opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite" />
-              </stop>
-              <stop offset="100%" stopColor="#6B7280" stopOpacity="0.4">
-                <animate attributeName="stop-opacity" values="0.4;0.7;0.4" dur="2s" repeatCount="indefinite" />
-              </stop>
-              <animateTransform
-                attributeName="gradientTransform"
-                type="translate"
-                values="0 0;200 0;0 0"
-                dur="3s"
-                repeatCount="indefinite"
-              />
-            </linearGradient>
-            
-            <linearGradient id="connectionGradientSelected" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#60A5FA" stopOpacity="0.5">
-                <animate attributeName="stop-opacity" values="0.5;0.9;0.5" dur="1.5s" repeatCount="indefinite" />
-              </stop>
-              <stop offset="50%" stopColor="#3B82F6" stopOpacity="1">
-                <animate attributeName="stop-opacity" values="1;0.95;1" dur="1.5s" repeatCount="indefinite" />
-              </stop>
-              <stop offset="100%" stopColor="#60A5FA" stopOpacity="0.5">
-                <animate attributeName="stop-opacity" values="0.5;0.9;0.5" dur="1.5s" repeatCount="indefinite" />
-              </stop>
-              <animateTransform
-                attributeName="gradientTransform"
-                type="translate"
-                values="0 0;250 0;0 0"
-                dur="2s"
-                repeatCount="indefinite"
-              />
-            </linearGradient>
-            
-            {/* No glow filter - clean lines */}
-            
-            {/* Very visible arrow markers */}
-            <marker
-              id="arrowhead"
-              markerWidth="18"
-              markerHeight="18"
-              refX="15"
-              refY="6"
-              orient="auto-start-reverse"
-              markerUnits="userSpaceOnUse"
-            >
-              <path
-                d="M 0 2 L 16 6 L 0 10 Z"
-                fill="#D1D5DB"
-                stroke="#9CA3AF"
-                strokeWidth="0.8"
-                opacity="1"
-              />
-            </marker>
-            <marker
-              id="arrowhead-selected"
-              markerWidth="20"
-              markerHeight="20"
-              refX="17"
-              refY="7"
-              orient="auto-start-reverse"
-              markerUnits="userSpaceOnUse"
-            >
-              <path
-                d="M 0 2 L 18 7 L 0 12 Z"
-                fill="#3B82F6"
-                stroke="#60A5FA"
-                strokeWidth="1.2"
-                opacity="1"
-              >
-                <animate attributeName="opacity" values="0.9;1;0.9" dur="1s" repeatCount="indefinite" />
-              </path>
-            </marker>
-          </defs>
-          <g transform={`scale(${zoom})`}>
-            {connections.map((conn) => {
-              // Convert connection IDs to strings to match node IDs
-              const fromId = String(conn.from)
-              const toId = String(conn.to)
-              
-              // Skip invalid connections
-              if (fromId === 'connecting' || fromId === 'null' || toId === 'null' || !fromId || !toId) {
-                return null
-              }
-              
-              const fromNode = nodes.find(n => String(n.id) === fromId)
-              const toNode = nodes.find(n => String(n.id) === toId)
-              
-              if (!fromNode || !toNode) return null
-              
-              // Skip connections if either node is filtered out
-              const fromVisible = filteredNodes.some(n => String(n.id) === fromId)
-              const toVisible = filteredNodes.some(n => String(n.id) === toId)
-              if (!fromVisible || !toVisible) return null
-
-              // Calculate connection points
-              const fromCenterY = fromNode.y + NODE_HEIGHT / 2
-              const toCenterY = toNode.y + NODE_HEIGHT / 2
-              const fromX = fromNode.x + NODE_WIDTH - ARROW_OFFSET
-              const toX = toNode.x + ARROW_OFFSET
-              const fromY = fromCenterY
-              const toY = toCenterY
-
-              const span = Math.max(toX - fromX, 40)
-              const controlOffset = Math.max(span * 0.4, 80)
-              const control1X = fromX + controlOffset
-              const control2X = toX - controlOffset
-              const control1Y = fromY
-              const control2Y = toY
-
-              const path = `M ${fromX} ${fromY} C ${control1X} ${control1Y} ${control2X} ${control2Y} ${toX} ${toY}`
-
-              const isSelected = selectedNodes.has(conn.from) || selectedNodes.has(conn.to)
-
-              return (
-                <g key={`conn-${conn.from}-${conn.to}`} className="connection-group">
-                  {/* Subtle background for depth */}
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={isSelected ? '#3B82F6' : '#4B5563'}
-                    strokeWidth={isSelected ? '6' : '5'}
-                    strokeOpacity="0.2"
-                    strokeLinecap="round"
-                    className="pointer-events-none"
-                  />
-                  
-                  {/* Main connection line - clean and visible */}
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={isSelected ? '#3B82F6' : '#D1D5DB'}
-                    strokeWidth={isSelected ? '4' : '3'}
-                    strokeOpacity="1"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="pointer-events-auto cursor-pointer"
-                    markerEnd={isSelected ? 'url(#arrowhead-selected)' : 'url(#arrowhead)'}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (e.detail === 2) {
-                        deleteConnection(conn.from, conn.to)
-                      }
-                    }}
-                  >
-                    <animate 
-                      attributeName="stroke-width" 
-                      values={isSelected ? "4;4.5;4" : "3;3.3;3"} 
-                      dur="2s" 
-                      repeatCount="indefinite" 
-                    />
-                  </path>
-                  
-                  {/* Flowing particles - thick and dark */}
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={isSelected ? '#2563EB' : '#6B7280'}
-                    strokeWidth={isSelected ? '7' : '6'}
-                    strokeOpacity="1"
-                    strokeLinecap="round"
-                    strokeDasharray="15,8"
-                    className="pointer-events-none"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      values="0;-23"
-                      dur="1.5s"
-                      repeatCount="indefinite"
-                    />
-                  </path>
-                  
-                  {/* Secondary flowing particles - thick and dark */}
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke={isSelected ? '#1E40AF' : '#4B5563'}
-                    strokeWidth="4"
-                    strokeOpacity="0.9"
-                    strokeLinecap="round"
-                    strokeDasharray="8,12"
-                    className="pointer-events-none"
-                  >
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      values="0;-20"
-                      dur="2.5s"
-                      repeatCount="indefinite"
-                    />
-                  </path>
-                  
-                  {/* Arrow marker - larger and more visible */}
-                  <path
-                    d={path}
-                    fill="none"
-                    stroke="transparent"
-                    strokeWidth="12"
-                    markerEnd={isSelected ? "url(#arrowhead-selected)" : "url(#arrowhead)"}
-                    className="pointer-events-none"
-                  />
-                </g>
-              )
-            })}
-          </g>
-        </svg>
-
-        {/* Nodes - render on top of connections */}
-        <div
-          className="absolute inset-0"
-          style={{ width: WORKSPACE_WIDTH, height: WORKSPACE_HEIGHT, zIndex: 1 }}
-        >
           <div
             style={{
               transform: `scale(${zoom})`,
               transformOrigin: '0 0',
               position: 'relative',
-              width: WORKSPACE_WIDTH,
-              height: WORKSPACE_HEIGHT,
+              width: workspaceSize.width,
+              height: workspaceSize.height,
             }}
           >
             {filteredNodes.length === 0 && searchQuery ? (
@@ -1256,65 +1032,65 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                         : 'border-divider'
                     }`} style={{ width: `${NODE_WIDTH}px`, minHeight: `${NODE_HEIGHT}px` }}>
                       {editingNode === node.id && editingField === 'name' ? (
-                  <input
-                    ref={editInputRef}
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={handleEditSave}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleEditSave()
-                      if (e.key === 'Escape') handleEditCancel()
-                    }}
-                    className="w-full bg-dark-surface border border-amber-gold/50 rounded px-2 py-1 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-amber-gold/50"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <h3 
-                    className="font-heading font-semibold text-base text-charcoal mb-1 cursor-text"
-                    onDoubleClick={(e) => {
-                      e.stopPropagation()
-                      setEditingNode(node.id)
-                      setEditingField('name')
-                      setEditValue(node.name)
-                    }}
-                  >
-                    {node.name}
-                  </h3>
-                )}
-                {editingNode === node.id && editingField === 'description' ? (
-                  <input
-                    ref={editInputRef}
-                    type="text"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={handleEditSave}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleEditSave()
-                      if (e.key === 'Escape') handleEditCancel()
-                    }}
-                    className="w-full bg-dark-surface border border-amber-gold/50 rounded px-2 py-1 text-xs text-mid-grey focus:outline-none focus:ring-2 focus:ring-amber-gold/50"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <p 
-                    className="text-xs text-mid-grey cursor-text"
-                    onDoubleClick={(e) => {
-                      e.stopPropagation()
-                      setEditingNode(node.id)
-                      setEditingField('description')
-                      setEditValue(node.description)
-                    }}
-                  >
-                    {node.description}
-                  </p>
-                )}
-              </div>
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={handleEditSave}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleEditSave()
+                            if (e.key === 'Escape') handleEditCancel()
+                          }}
+                          className="w-full bg-dark-surface border border-amber-gold/50 rounded px-2 py-1 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-amber-gold/50"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <h3 
+                          className="font-heading font-semibold text-base text-charcoal mb-1 cursor-text"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            setEditingNode(node.id)
+                            setEditingField('name')
+                            setEditValue(node.name)
+                          }}
+                        >
+                          {node.name}
+                        </h3>
+                      )}
+                      {editingNode === node.id && editingField === 'description' ? (
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={handleEditSave}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleEditSave()
+                            if (e.key === 'Escape') handleEditCancel()
+                          }}
+                          className="w-full bg-dark-surface border border-amber-gold/50 rounded px-2 py-1 text-xs text-mid-grey focus:outline-none focus:ring-2 focus:ring-amber-gold/50"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <p 
+                          className="text-xs text-mid-grey cursor-text"
+                          onDoubleClick={(e) => {
+                            e.stopPropagation()
+                            setEditingNode(node.id)
+                            setEditingField('description')
+                            setEditValue(node.description)
+                          }}
+                        >
+                          {node.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )
+              }))}
             </div>
-            )
-          }))}
-        </div>
-        </div>
+          </div>
 
         {/* Context Menu */}
         {contextMenu && (
