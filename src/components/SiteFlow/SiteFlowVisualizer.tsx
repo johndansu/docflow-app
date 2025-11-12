@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { type SiteFlowData } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
 
@@ -24,7 +24,16 @@ interface SiteFlowVisualizerProps {
   initialSiteFlow?: SiteFlowData
 }
 
-const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange, initialSiteFlow }: SiteFlowVisualizerProps) => {
+export interface SiteFlowHandle {
+  getCurrentSiteFlow: () => SiteFlowData | null
+}
+
+const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
+  appDescription = '',
+  prdContent,
+  onSiteFlowChange,
+  initialSiteFlow,
+}, ref) => {
   const [nodes, setNodes] = useState<Node[]>(initialSiteFlow?.nodes || [])
   const [connections, setConnections] = useState<Connection[]>(initialSiteFlow?.connections || [])
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
@@ -41,10 +50,16 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
   const [history, setHistory] = useState<SiteFlowData[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
-  const [searchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showMinimap, setShowMinimap] = useState(true)
   const canvasRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
+  const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
+
+  useImperativeHandle(ref, () => ({
+    getCurrentSiteFlow: () => latestSiteFlowRef.current,
+  }), [])
 
   useEffect(() => {
     // If initial site flow is provided, use it and don't regenerate
@@ -64,8 +79,14 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
 
   // Notify parent when site flow changes
   useEffect(() => {
-    if (onSiteFlowChange && nodes.length > 0) {
-      onSiteFlowChange({ nodes, connections })
+    if (nodes.length > 0) {
+      const currentData: SiteFlowData = { nodes, connections }
+      latestSiteFlowRef.current = currentData
+      if (onSiteFlowChange) {
+        onSiteFlowChange(currentData)
+      }
+    } else {
+      latestSiteFlowRef.current = null
     }
   }, [nodes, connections, onSiteFlowChange])
 
@@ -1493,6 +1514,6 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
       </div>
     </div>
   )
-}
+})
 
 export default SiteFlowVisualizer

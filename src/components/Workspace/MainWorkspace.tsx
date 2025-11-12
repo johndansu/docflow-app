@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import DocumentViewer from '../DocumentGeneration/DocumentViewer'
-import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
+import SiteFlowVisualizer, { type SiteFlowHandle } from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
 import { storage, type SiteFlowData } from '../../utils/storage'
 import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories, generateSpecs } from '../../utils/contentGenerator'
@@ -18,6 +18,7 @@ const MainWorkspace = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [siteFlowData, setSiteFlowData] = useState<SiteFlowData | null>(null)
+  const siteFlowRef = useRef<SiteFlowHandle>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -143,13 +144,15 @@ const MainWorkspace = () => {
           content: doc.content,
       }))
       
+      const latestSiteFlow = siteFlowRef.current?.getCurrentSiteFlow()
+      
       await storage.save({
         title: projectName || 'Untitled Project',
         type: 'PRD', // Default type for backward compatibility
         description: appDescription.substring(0, 200) || `Complete project documentation`,
         content: prdDoc?.content || generatedDocs[0]?.content || '', // Primary content for backward compatibility
         documents: documents, // All documents stored together
-        siteFlow: siteFlowData || undefined, // Site flow data
+        siteFlow: siteFlowData || latestSiteFlow || undefined, // Site flow data
       })
       
       setIsSaving(false)
@@ -300,6 +303,7 @@ const MainWorkspace = () => {
           </div>
           <div className="p-5">
             <SiteFlowVisualizer 
+              ref={siteFlowRef}
               appDescription={appDescription}
               prdContent={generatedDocs.find(doc => doc.type === 'PRD')?.content}
               onSiteFlowChange={setSiteFlowData}

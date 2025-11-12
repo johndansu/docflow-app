@@ -19,15 +19,20 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [activeDocumentIndex, setActiveDocumentIndex] = useState(0)
   const [activeTab, setActiveTab] = useState<'documents' | 'siteflow'>('documents')
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadProject = async () => {
+      setIsLoading(true)
       const loadedProject = await storage.get(projectId)
       if (loadedProject) {
         setProject(loadedProject)
         setEditedTitle(loadedProject.title)
         setEditedDescription(loadedProject.description)
+      } else {
+        setProject(null)
       }
+      setIsLoading(false)
     }
     loadProject()
   }, [projectId])
@@ -72,6 +77,14 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
       : project.content
     
     exportToPDF(contentToExport, project.title)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="text-charcoal">Loading project…</div>
+      </div>
+    )
   }
 
   if (!project) {
