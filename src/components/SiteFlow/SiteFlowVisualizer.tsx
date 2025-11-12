@@ -747,7 +747,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const centerX = availableWidth / 2
     const centerY = availableHeight / 2
     
-    // Group nodes by level
     const nodesByLevel = new Map<number, Node[]>()
     nodes.forEach(node => {
       const level = node.level ?? 0
@@ -756,165 +755,173 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
       nodesByLevel.get(level)!.push(node)
     })
-    
-    // Find home node (level 0)
+
+    const nodesById = new Map<string, Node>(nodes.map(node => [node.id, node]))
+    const allLevels = Array.from(nodesByLevel.keys()).filter(level => level > 0).sort((a, b) => a - b)
+
+    const parentToChildren = new Map<string, Node[]>()
+    connections.forEach((conn) => {
+      const child = nodesById.get(conn.to)
+      if (!child) return
+      if (!parentToChildren.has(conn.from)) {
+        parentToChildren.set(conn.from, [])
+      }
+      parentToChildren.get(conn.from)!.push(child)
+    })
+
+    const placedNodes = new Map<string, Node>()
+    const nodeAngles = new Map<string, number>()
+
+    const placeNode = (node: Node, angle: number, radius: number) => {
+      const x = centerX + Math.cos(angle) * radius
+      const y = centerY + Math.sin(angle) * radius
+      placedNodes.set(node.id, { ...node, x, y })
+      nodeAngles.set(node.id, angle)
+    }
+
+    // Place home node at center
     const homeNode = nodes.find(n => n.level === 0) || nodes[0]
-    
-    // Natural spacing constants
-    const level1Radius = Math.min(availableWidth, availableHeight) * 0.25 // 25% of canvas
-    const level2Radius = Math.min(availableWidth, availableHeight) * 0.15 // 15% of canvas
-    const minNodeDistance = 300 // Increased minimum distance between nodes to prevent overlaps
-    const nodeWidth = 200 // Approximate node width
-    const nodeHeight = 80 // Approximate node height
-    
-    // First pass: position all nodes
-    const newNodes = nodes.map(node => {
-      if (node.level === 0 || node.id === homeNode.id) {
-        // Home node - position near center, slightly offset
-        return {
-          ...node,
-          x: centerX - 100,
-          y: centerY - 150
-        }
-      }
-      
-      // Get level 1 nodes (directly connected to home)
-      const level1Nodes = nodesByLevel.get(1) || []
-      const level1Index = level1Nodes.findIndex(n => n.id === node.id)
-      
-      if (node.level === 1) {
-        // Level 1 nodes - arrange in a natural arc around home
-        const angle = (level1Index / Math.max(level1Nodes.length, 1)) * Math.PI * 1.5 + Math.PI / 4
-        const radius = level1Radius + (level1Index % 2) * 50 // Vary radius slightly for natural look
-        return {
-          ...node,
-          x: centerX - 100 + Math.cos(angle) * radius,
-          y: centerY - 150 + Math.sin(angle) * radius
-        }
-      }
-      
-      // Fallback for now - will be positioned in second pass
-      const nodeIndex = nodes.findIndex(n => n.id === node.id)
-      const fallbackX = padding + (nodeIndex * 150) % (availableWidth - padding * 2)
-      const fallbackY = padding + Math.floor(nodeIndex / 3) * 150 % (availableHeight - padding * 2)
-      return {
-        ...node,
-        x: fallbackX,
-        y: fallbackY
+    placedNodes.set(homeNode.id, { ...homeNode, x: centerX, y: centerY })
+    nodeAngles.set(homeNode.id, -Math.PI / 2)
+
+    const baseRadius = Math.min(availableWidth, availableHeight) * 0.28
+    const levelGap = Math.min(availableWidth, availableHeight) * 0.18
+
+    // Level 1 nodes evenly around the home node
+    const level1Nodes = nodesByLevel.get(1) || []
+    const level1Count = level1Nodes.length
+    if (level1Count > 0) {
+      level1Nodes.forEach((node, idx) => {
+        const angle = level1Count === 1
+          ? -Math.PI / 2
+          : ((2 * Math.PI) * idx) / level1Count - Math.PI / 2
+        placeNode(node, angle, baseRadius)
+      })
+    }
+
+    // Higher-level nodes positioned around their parents
+    allLevels.forEach((level) => {
+      if (level <= 1) return
+      const levelNodes = nodesByLevel.get(level) || []
+      if (levelNodes.length === 0) return
+      const levelRadius = baseRadius + levelGap * (level - 1)
+      const remaining = new Set(levelNodes.map(node => node.id))
+
+      parentToChildren.forEach((children, parentId) => {
+        const group = children.filter(child => (child.level ?? 0) === level)
+        if (group.length === 0) return
+        const parent = placedNodes.get(parentId)
+        if (!parent) return
+
+        const parentAngle = nodeAngles.get(parentId) ?? -Math.PI / 2
+        const count = group.length
+        const spread = Math.min(Math.PI / 1.4, 0.4 * count)
+        const step = count > 1 ? spread / (count - 1) : 0
+        const startAngle = parentAngle - spread / 2
+
+        group.forEach((child, index) => {
+          const angle = count > 1 ? startAngle + index * step : parentAngle
+          placeNode(child, angle, levelRadius)
+          remaining.delete(child.id)
+        })
+      })
+
+      // Any remaining nodes without placed parents are distributed evenly
+      const remainingIds = Array.from(remaining)
+      const remainingCount = remainingIds.length
+      if (remainingCount > 0) {
+        remainingIds.forEach((id, idx) => {
+          const node = nodesById.get(id)
+          if (!node) return
+          const angle = remainingCount === 1
+            ? -Math.PI / 2
+            : ((2 * Math.PI) * idx) / remainingCount - Math.PI / 2
+          placeNode(node, angle, levelRadius)
+        })
       }
     })
-    
-    // Second pass: position level 2+ nodes relative to their parents
-    const finalPositionedNodes = newNodes.map(node => {
-      if (node.level === 0 || node.level === 1) {
-        return node // Already positioned
+
+    // Ensure every node has a position
+    nodes.forEach((node) => {
+      if (!placedNodes.has(node.id)) {
+        placedNodes.set(node.id, { ...node, x: centerX, y: centerY })
       }
-      
-      // Level 2+ nodes - position relative to their parent
-      const parentConnections = connections.filter(c => c.to === node.id)
-      if (parentConnections.length > 0) {
-        const parentId = parentConnections[0].from
-        const parentNode = newNodes.find(n => n.id === parentId)
-        if (parentNode) {
-          // Find all siblings (nodes with same parent)
-          const allSiblings = newNodes.filter(n => {
-            const conn = connections.find(c => c.to === n.id && c.from === parentId)
-            return conn && n.level === node.level
-          })
-          const actualSiblingIndex = allSiblings.findIndex(n => n.id === node.id)
-          const offsetAngle = (actualSiblingIndex - allSiblings.length / 2) * 0.5
-          const baseAngle = Math.atan2(
-            parentNode.y - (centerY - 150),
-            parentNode.x - (centerX - 100)
-          )
-          const distance = level2Radius + (actualSiblingIndex % 3) * 30 // Vary distance for natural look
-          
-          return {
-            ...node,
-            x: parentNode.x + Math.cos(baseAngle + offsetAngle) * distance,
-            y: parentNode.y + Math.sin(baseAngle + offsetAngle) * distance
-          }
-        }
-      }
-      
-      return node // Keep fallback position
     })
-    
+
+    const initialNodes = nodes.map(node => placedNodes.get(node.id) ?? node)
+
     // Apply force-directed spacing to prevent overlaps - enhanced algorithm
-    const finalNodes = [...finalPositionedNodes]
-    const iterations = 20 // More iterations for better spacing
-    const damping = 0.3 // Damping factor for smoother movement
-    
+    const finalNodes = initialNodes.map(node => ({ ...node }))
+    const iterations = 25
+    const damping = 0.28
+    const nodeWidth = 200
+    const nodeHeight = 80
+
     for (let i = 0; i < iterations; i++) {
       finalNodes.forEach((node, idx) => {
         let fx = 0, fy = 0
-        
+
         finalNodes.forEach((otherNode, otherIdx) => {
           if (idx === otherIdx) return
-          
+
           const dx = otherNode.x - node.x
           const dy = otherNode.y - node.y
           const distance = Math.sqrt(dx * dx + dy * dy) || 0.1
-          
-          // Calculate actual minimum distance needed (considering node dimensions)
+
           const actualMinDistance = minNodeDistance + Math.max(nodeWidth, nodeHeight) / 2
-          
-          // Stronger repulsion force - push nodes apart more aggressively
+
           if (distance < actualMinDistance) {
             const overlap = actualMinDistance - distance
-            const force = (overlap / actualMinDistance) * 50 // Stronger force
+            const force = (overlap / actualMinDistance) * 55
             fx -= (dx / distance) * force
             fy -= (dy / distance) * force
           } else if (distance < actualMinDistance * 1.5) {
-            // Gentle repulsion even when close but not overlapping
-            const force = ((actualMinDistance * 1.5 - distance) / actualMinDistance) * 10
+            const force = ((actualMinDistance * 1.5 - distance) / actualMinDistance) * 12
             fx -= (dx / distance) * force
             fy -= (dy / distance) * force
-    }
+          }
         })
 
-        // Apply forces with damping and keep within bounds
         const newX = node.x + fx * damping
         const newY = node.y + fy * damping
-        
+
         node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, newX))
         node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, newY))
       })
     }
-    
-    // Final pass: check for any remaining overlaps and fix them
+
+    // Final pass: resolve remaining overlaps directly
     finalNodes.forEach((node, idx) => {
       finalNodes.forEach((otherNode, otherIdx) => {
         if (idx === otherIdx) return
-        
+
         const dx = otherNode.x - node.x
         const dy = otherNode.y - node.y
         const distance = Math.sqrt(dx * dx + dy * dy) || 0.1
         const actualMinDistance = minNodeDistance + Math.max(nodeWidth, nodeHeight) / 2
-        
+
         if (distance < actualMinDistance) {
-          // Push nodes apart directly
           const pushDistance = (actualMinDistance - distance) / 2
           const pushX = (dx / distance) * pushDistance
           const pushY = (dy / distance) * pushDistance
-          
+
           node.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, node.x - pushX))
           node.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, node.y - pushY))
-          
+
           otherNode.x = Math.max(padding + nodeWidth / 2, Math.min(availableWidth - padding - nodeWidth / 2, otherNode.x + pushX))
           otherNode.y = Math.max(padding + nodeHeight / 2, Math.min(availableHeight - padding - nodeHeight / 2, otherNode.y + pushY))
         }
       })
     })
-    
+
     setNodes(finalNodes)
-    
+
     // Center the nodes in view at 50% zoom
     const allX = finalNodes.map(n => n.x)
     const allY = finalNodes.map(n => n.y)
     const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
     const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
-    
+
     setPanOffset({
       x: canvasWidth / 2 - centerNodeX * targetZoom,
       y: canvasHeight / 2 - centerNodeY * targetZoom
