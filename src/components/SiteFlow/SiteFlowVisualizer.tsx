@@ -1463,23 +1463,30 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         </div>
 
         {showMinimap && minimapComputed && (
-          <div
-            className="absolute bottom-16 right-4 bg-dark-card/90 border border-divider/50 rounded-lg shadow-lg p-3 z-40 backdrop-blur-sm"
-          >
-            <div className="text-[10px] text-mid-grey uppercase tracking-wide mb-2">Mini-map</div>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-dark-card/95 border border-divider/40 rounded-xl shadow-lg px-5 py-4 z-40 backdrop-blur-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-medium uppercase tracking-[0.25em] text-mid-grey">Overview</span>
+              <span className="text-[10px] text-mid-grey/70">{nodes.length} pages</span>
+            </div>
             <svg
               width={minimapComputed.width}
               height={minimapComputed.height}
-              style={{ display: 'block' }}
+              className="rounded-lg bg-[#0D0D0D] border border-divider/40"
             >
+              <defs>
+                <linearGradient id="mini-conn" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#475569" stopOpacity="0.45" />
+                  <stop offset="50%" stopColor="#94A3B8" stopOpacity="0.55" />
+                  <stop offset="100%" stopColor="#475569" stopOpacity="0.45" />
+                </linearGradient>
+              </defs>
               <rect
                 x={0}
                 y={0}
                 width={minimapComputed.width}
                 height={minimapComputed.height}
-                rx={6}
-                fill="rgba(17,17,17,0.85)"
-                stroke="rgba(148,163,184,0.25)"
+                rx={8}
+                fill="#0D0D0D"
               />
               {connections.map((conn, idx) => {
                 const fromPos = minimapComputed.nodeMap.get(conn.from)
@@ -1492,8 +1499,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     y1={fromPos.y}
                     x2={toPos.x}
                     y2={toPos.y}
-                    stroke="rgba(148,163,184,0.45)"
+                    stroke="url(#mini-conn)"
                     strokeWidth={1}
+                    strokeLinecap="round"
+                    strokeOpacity={0.65}
                   />
                 )
               })}
@@ -1502,9 +1511,9 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   key={`mini-node-${node.id}`}
                   cx={node.x}
                   cy={node.y}
-                  r={node.level === 0 ? 4 : 3}
-                  fill={node.level === 0 ? '#FBBF24' : '#E5E7EB'}
-                  stroke="rgba(17,24,39,0.6)"
+                  r={node.level === 0 ? 4.5 : 3.5}
+                  fill={node.level === 0 ? '#FBBF24' : '#E2E8F0'}
+                  stroke="rgba(15,23,42,0.7)"
                   strokeWidth={1}
                 />
               ))}
@@ -1514,10 +1523,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   y={minimapViewport.y}
                   width={minimapViewport.width}
                   height={minimapViewport.height}
-                  rx={2}
-                  fill="rgba(251,191,36,0.18)"
-                  stroke="rgba(251,191,36,0.9)"
-                  strokeWidth={1}
+                  rx={3}
+                  fill="rgba(251,191,36,0.12)"
+                  stroke="#FBBF24"
+                  strokeWidth={1.2}
                 />
               )}
             </svg>
