@@ -50,7 +50,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
   const [history, setHistory] = useState<SiteFlowData[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
-  const searchQuery = ''
+  const searchQuery: string = ''
   const canvasRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
   const canvasContainerRef = useRef<HTMLDivElement>(null)
@@ -150,12 +150,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }
 
   // Filtered nodes based on search
-  const filteredNodes = searchQuery
-    ? nodes.filter(node =>
-        node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        node.description.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : nodes
+  const filteredNodes = nodes
 
   // Keyboard shortcuts
   useEffect(() => {
