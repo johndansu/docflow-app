@@ -47,6 +47,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
   const [zoom, setZoom] = useState(0.3) // Default to 30% zoom
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
+  const [workspaceSize, setWorkspaceSize] = useState({ width: WORKSPACE_WIDTH, height: WORKSPACE_HEIGHT })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
@@ -746,7 +747,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const canvasWidth = rect.width
     const canvasHeight = rect.height
     const targetZoom = 0.3
-    const availableWidth = WORKSPACE_WIDTH
     const padding = 200
 
     const nodesById = new Map<string, Node>(nodes.map(node => [String(node.id), node]))
@@ -764,7 +764,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
-    const horizontalGap = Math.max((availableWidth - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
+    const horizontalGap = Math.max((WORKSPACE_WIDTH - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
 
     const positions = new Map<string, { x: number; y: number }>()
     const visited = new Set<string>()
@@ -827,10 +827,18 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       return { ...node, x: pos.x, y: pos.y }
     })
 
-    setNodes(laidOut)
-
     const allX = laidOut.map(n => n.x)
     const allY = laidOut.map(n => n.y)
+    const maxX = Math.max(...allX, 0)
+    const maxY = Math.max(...allY, 0)
+    const widthNeeded = maxX + NODE_WIDTH + padding
+    const heightNeeded = maxY + NODE_HEIGHT + padding
+    const newWidth = Math.max(WORKSPACE_WIDTH, widthNeeded)
+    const newHeight = Math.max(WORKSPACE_HEIGHT, heightNeeded)
+    setWorkspaceSize({ width: newWidth, height: newHeight })
+
+    setNodes(laidOut)
+
     const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
     const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
 
@@ -919,15 +927,15 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         ref={canvasRef}
         className="flex-1 relative rounded-lg border border-divider/50 overflow-auto"
         style={{
+          width: '100%',
+          height: '100%',
           backgroundImage: `
             linear-gradient(to right, #2A2A2A 1px, transparent 1px),
             linear-gradient(to bottom, #2A2A2A 1px, transparent 1px)
           `,
-          backgroundSize: `${20 * zoom}px ${20 * zoom}px`,
+          backgroundSize: '20px 20px',
           backgroundColor: '#121212',
-          cursor: isPanning ? 'grabbing' : connectingFrom ? 'crosshair' : 'default',
-          minHeight: WORKSPACE_HEIGHT,
-          minWidth: '100%'
+          cursor: isPanning ? 'grabbing' : connectingFrom ? 'crosshair' : 'default'
         }}
         onMouseDown={handleCanvasMouseDown}
         onClick={(e) => {
@@ -947,12 +955,14 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         <div
           ref={canvasContainerRef}
           className="relative"
-          style={{ width: WORKSPACE_WIDTH, height: WORKSPACE_HEIGHT }}
+          style={{ width: workspaceSize.width, height: workspaceSize.height }}
         >
         {/* SVG for connections - render behind nodes */}
         <svg 
           className="absolute inset-0 z-0" 
-          style={{ width: '100%', height: '100%', zIndex: 0, overflow: 'visible', pointerEvents: 'none' }}
+          width={workspaceSize.width}
+          height={workspaceSize.height}
+          style={{ width: workspaceSize.width, height: workspaceSize.height, zIndex: 0, overflow: 'visible', pointerEvents: 'none' }}
         >
           <defs>
             {/* Supabase-style animated gradients - flowing effect */}
@@ -1034,7 +1044,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
               </path>
             </marker>
           </defs>
-          <g transform={`translate(${panOffset.x}, ${panOffset.y}) scale(${zoom})`}>
+          <g transform={`scale(${zoom})`}>
             {connections.map((conn) => {
               // Convert connection IDs to strings to match node IDs
               const fromId = String(conn.from)
@@ -1168,81 +1178,84 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
         {/* Nodes - render on top of connections */}
         <div
-          style={{
-            transform: `scale(${zoom})`,
-            transformOrigin: '0 0',
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            zIndex: 1,
-          }}
+          className="absolute inset-0"
+          style={{ width: WORKSPACE_WIDTH, height: WORKSPACE_HEIGHT, zIndex: 1 }}
         >
-          {filteredNodes.length === 0 && searchQuery ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-sm text-mid-grey">No nodes match "{searchQuery}"</p>
-            </div>
-          ) : filteredNodes.length === 0 ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-sm text-mid-grey">No nodes to display</p>
-            </div>
-          ) : (
-            filteredNodes.map((node) => {
-            const isHighlighted = searchQuery && (
-              node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              node.description.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-            return (
-            <div
-              key={node.id}
-              className={`absolute cursor-move ${selectedNodes.has(node.id) ? 'ring-2 ring-amber-gold' : ''} ${draggingNode === node.id ? 'opacity-80 z-50' : ''} ${connectingFrom === node.id ? 'ring-2 ring-amber-gold ring-offset-2' : ''}`}
-              style={{
-                left: `${node.x}px`,
-                top: `${node.y}px`,
-              }}
-              onMouseDown={(e) => {
-                if (connectingFrom && connectingFrom !== node.id && connectingFrom !== 'connecting') {
-                  handleNodeClick(node.id, e)
-                } else if (!connectingFrom) {
-                  handleMouseDown(e, node.id)
-                }
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (connectingFrom) {
-                  handleNodeClick(node.id, e)
-                } else {
-                  // Regular click - select node
-                  if (e.shiftKey) {
-                    setSelectedNodes(prev => {
-                      const newSet = new Set(prev)
-                      if (newSet.has(node.id)) {
-                        newSet.delete(node.id)
-                      } else {
-                        newSet.add(node.id)
+          <div
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: '0 0',
+              position: 'relative',
+              width: WORKSPACE_WIDTH,
+              height: WORKSPACE_HEIGHT,
+            }}
+          >
+            {filteredNodes.length === 0 && searchQuery ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-sm text-mid-grey">No nodes match "{searchQuery}"</p>
+              </div>
+            ) : filteredNodes.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-sm text-mid-grey">No nodes to display</p>
+              </div>
+            ) : (
+              filteredNodes.map((node) => {
+                const isHighlighted = searchQuery && (
+                  node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  node.description.toLowerCase().includes(searchQuery.toLowerCase())
+                )
+                return (
+                  <div
+                    key={node.id}
+                    className={`absolute cursor-move ${selectedNodes.has(node.id) ? 'ring-2 ring-amber-gold' : ''} ${draggingNode === node.id ? 'opacity-80 z-50' : ''} ${connectingFrom === node.id ? 'ring-2 ring-amber-gold ring-offset-2' : ''}`}
+                    style={{
+                      left: `${node.x}px`,
+                      top: `${node.y}px`,
+                    }}
+                    onMouseDown={(e) => {
+                      if (connectingFrom && connectingFrom !== node.id && connectingFrom !== 'connecting') {
+                        handleNodeClick(node.id, e)
+                      } else if (!connectingFrom) {
+                        handleMouseDown(e, node.id)
                       }
-                      return newSet
-                    })
-                  } else {
-                    setSelectedNodes(new Set([node.id]))
-                  }
-                }
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                if (!connectingFrom) {
-                  handleNodeClick(node.id, e)
-                }
-              }}
-              onContextMenu={(e) => handleContextMenu(e, node.id)}
-            >
-              <div className={`bg-dark-card border rounded-lg p-3 hover:shadow-lg transition-shadow ${
-                node.level === 0 
-                  ? 'bg-amber-gold/5 border-2 border-amber-gold/30' 
-                  : isHighlighted
-                  ? 'border-2 border-amber-gold/50 bg-amber-gold/10'
-                  : 'border-divider'
-              }`} style={{ width: `${NODE_WIDTH}px` }}>
-                {editingNode === node.id && editingField === 'name' ? (
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (connectingFrom) {
+                        handleNodeClick(node.id, e)
+                      } else {
+                        // Regular click - select node
+                        if (e.shiftKey) {
+                          setSelectedNodes(prev => {
+                            const newSet = new Set(prev)
+                            if (newSet.has(node.id)) {
+                              newSet.delete(node.id)
+                            } else {
+                              newSet.add(node.id)
+                            }
+                            return newSet
+                          })
+                        } else {
+                          setSelectedNodes(new Set([node.id]))
+                        }
+                      }
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      if (!connectingFrom) {
+                        handleNodeClick(node.id, e)
+                      }
+                    }}
+                    onContextMenu={(e) => handleContextMenu(e, node.id)}
+                  >
+                    <div className={`bg-dark-card border rounded-lg p-4 hover:shadow-lg transition-shadow ${
+                      node.level === 0
+                        ? 'bg-amber-gold/5 border-2 border-amber-gold/30'
+                        : isHighlighted
+                        ? 'border-2 border-amber-gold/50 bg-amber-gold/10'
+                        : 'border-divider'
+                    }`} style={{ width: `${NODE_WIDTH}px`, minHeight: `${NODE_HEIGHT}px` }}>
+                      {editingNode === node.id && editingField === 'name' ? (
                   <input
                     ref={editInputRef}
                     type="text"
