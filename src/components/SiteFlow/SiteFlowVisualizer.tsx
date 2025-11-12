@@ -1504,7 +1504,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
       {/* Simple Instructions */}
       <div className="mt-2 text-xs text-mid-grey text-center">
-        Double-click nodes to edit • Right-click for menu • Scroll to zoom • Drag to pan
+        Double-click nodes to edit • Right-click for menu • Scroll or two-finger drag to pan • Hold Ctrl/Cmd and scroll (or use a mouse wheel) to zoom
       </div>
     </div>
   )
