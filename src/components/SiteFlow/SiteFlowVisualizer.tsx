@@ -756,6 +756,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       nodesByLevel.get(level)!.push(node)
     })
 
+    const minNodeDistance = Math.min(availableWidth, availableHeight) * 0.12
+
     const nodesById = new Map<string, Node>(nodes.map(node => [node.id, node]))
     const allLevels = Array.from(nodesByLevel.keys()).filter(level => level > 0).sort((a, b) => a - b)
 
