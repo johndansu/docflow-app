@@ -737,11 +737,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
   }
 
-  const handleZoomSliderChange = (value: number) => {
-    const clamped = Math.max(0.3, Math.min(1.5, value))
-    setZoom(parseFloat(clamped.toFixed(2)))
-  }
-
   const centerView = () => {
     if (nodes.length === 0 || !canvasRef.current) return
 
