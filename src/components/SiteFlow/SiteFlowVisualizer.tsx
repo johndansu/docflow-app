@@ -742,11 +742,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const centerView = () => {
     if (nodes.length === 0 || !canvasRef.current) return
 
-      const rect = canvasRef.current.getBoundingClientRect()
+    const rect = canvasRef.current.getBoundingClientRect()
     const canvasWidth = rect.width
     const canvasHeight = rect.height
-    const targetZoom = 0.5
-    const availableWidth = canvasWidth / targetZoom
+    const targetZoom = 0.3
+    const availableWidth = WORKSPACE_WIDTH
+    const availableHeight = WORKSPACE_HEIGHT
     const padding = 200
 
     const nodesById = new Map<string, Node>(nodes.map(node => [String(node.id), node]))
@@ -765,6 +766,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
     const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
     const horizontalGap = Math.max((availableWidth - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
+
     const positions = new Map<string, { x: number; y: number }>()
     const visited = new Set<string>()
     let nextY = padding
@@ -833,11 +835,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
     const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
 
-    setPanOffset({
-      x: canvasWidth / 2 - centerNodeX * targetZoom,
-      y: canvasHeight / 2 - centerNodeY * targetZoom
-    })
+    setPanOffset({ x: 0, y: 0 })
     setZoom(targetZoom)
+
+    const scrollLeft = Math.max(0, centerNodeX * targetZoom - canvasWidth / 2)
+    const scrollTop = Math.max(0, centerNodeY * targetZoom - canvasHeight / 2)
+    canvasRef.current.scrollTo({ left: scrollLeft, top: scrollTop })
   }
 
   // Track if we've auto-fitted for current node set
@@ -1165,7 +1168,16 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         </svg>
 
         {/* Nodes - render on top of connections */}
-        <div style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: '0 0', position: 'relative', width: '100%', height: '100%', zIndex: 1 }}>
+        <div
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: '0 0',
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            zIndex: 1,
+          }}
+        >
           {filteredNodes.length === 0 && searchQuery ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <p className="text-sm text-mid-grey">No nodes match "{searchQuery}"</p>
