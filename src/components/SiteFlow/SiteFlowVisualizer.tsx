@@ -747,7 +747,7 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
   const centerView = () => {
     if (nodes.length === 0 || !canvasRef.current) return
     
-    const rect = canvasRef.current.getBoundingClientRect()
+      const rect = canvasRef.current.getBoundingClientRect()
     const canvasWidth = rect.width
     const canvasHeight = rect.height
     
@@ -886,9 +886,9 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
             const force = ((actualMinDistance * 1.5 - distance) / actualMinDistance) * 10
             fx -= (dx / distance) * force
             fy -= (dy / distance) * force
-          }
+    }
         })
-        
+
         // Apply forces with damping and keep within bounds
         const newX = node.x + fx * damping
         const newY = node.y + fy * damping
@@ -1042,9 +1042,9 @@ const SiteFlowVisualizer = ({ appDescription = '', prdContent, onSiteFlowChange,
           
           if (isZoomGesture || isMouseWheel) {
             // Zoom gesture
-            e.preventDefault()
-            const delta = e.deltaY > 0 ? -0.1 : 0.1
-            handleZoom(delta)
+          e.preventDefault()
+          const delta = e.deltaY > 0 ? -0.1 : 0.1
+          handleZoom(delta)
           } else {
             // Trackpad scroll - pan the canvas
             e.preventDefault()

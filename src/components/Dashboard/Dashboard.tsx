@@ -64,7 +64,7 @@ const Dashboard = ({ onNavigateToNew }: DashboardProps = {}) => {
         if (onNavigateToNew) {
           onNavigateToNew()
         } else {
-          setShowGenerator(true)
+        setShowGenerator(true)
         }
       }
       
