@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
 import { type SiteFlowData } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
 
@@ -16,6 +16,8 @@ interface Connection {
   from: string
   to: string
 }
+
+type RenderedConnection = Connection & { generated?: boolean }
 
 interface SiteFlowVisualizerProps {
   appDescription?: string
@@ -66,6 +68,60 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
+
+  const renderedConnections: RenderedConnection[] = useMemo(() => {
+    const result: RenderedConnection[] = [...connections]
+    const existing = new Set(result.map(conn => `${conn.from}->${conn.to}`))
+    const incomingCounts = new Map<string, number>()
+    result.forEach(conn => {
+      incomingCounts.set(conn.to, (incomingCounts.get(conn.to) ?? 0) + 1)
+    })
+
+    const nodesByLevel = new Map<number, Node[]>()
+    nodes.forEach(node => {
+      const level = node.level ?? 0
+      if (!nodesByLevel.has(level)) {
+        nodesByLevel.set(level, [])
+      }
+      nodesByLevel.get(level)!.push(node)
+    })
+
+    nodes.forEach(node => {
+      const nodeLevel = node.level ?? 0
+      if (nodeLevel <= 0) return
+      if ((incomingCounts.get(node.id) ?? 0) > 0) return
+
+      const desiredParentLevel = nodeLevel - 1
+      const potentialParents = nodesByLevel.get(desiredParentLevel) ?? []
+      let parent: Node | undefined
+
+      if (potentialParents.length > 0) {
+        parent = potentialParents.reduce((closest, candidate) => {
+          if (candidate.id === node.id) return closest
+          if (!closest) return candidate
+          const candidateDistance = Math.abs(candidate.y - node.y)
+          const closestDistance = Math.abs(closest.y - node.y)
+          return candidateDistance < closestDistance ? candidate : closest
+        }, undefined as Node | undefined)
+      }
+
+      if (!parent) {
+        const rootCandidates = nodesByLevel.get(0) ?? []
+        parent = rootCandidates[0]
+      }
+
+      if (parent && parent.id !== node.id) {
+        const key = `${parent.id}->${node.id}`
+        if (!existing.has(key)) {
+          result.push({ from: parent.id, to: node.id, generated: true })
+          existing.add(key)
+          incomingCounts.set(node.id, (incomingCounts.get(node.id) ?? 0) + 1)
+        }
+      }
+    })
+
+    return result
+  }, [connections, nodes])
 
   useImperativeHandle(ref, () => ({
     getCurrentSiteFlow: () => latestSiteFlowRef.current,
@@ -1069,7 +1125,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   id="siteflow-arrow-start"
                   markerWidth="12"
                   markerHeight="12"
-                  refX="9"
+                  refX="3"
                   refY="6"
                   orient="auto-start-reverse"
                   markerUnits="strokeWidth"
@@ -1091,7 +1147,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   id="siteflow-arrow-start-gradient"
                   markerWidth="12"
                   markerHeight="12"
-                  refX="9"
+                  refX="3"
                   refY="6"
                   orient="auto-start-reverse"
                   markerUnits="strokeWidth"
@@ -1106,7 +1162,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   </feMerge>
                 </filter>
               </defs>
-              {connections.map((connection, index) => {
+              {renderedConnections.map((connection, index) => {
                 const fromNode = nodes.find(node => node.id === connection.from)
                 const toNode = nodes.find(node => node.id === connection.to)
 
@@ -1119,7 +1175,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   : fromNode.x + ARROW_OFFSET
                 const startY = fromNode.y + NODE_HEIGHT / 2
                 const endX = isForward
-                  ? toNode.x + ARROW_OFFSET
+                  ? toNode.x - ARROW_OFFSET
                   : toNode.x + NODE_WIDTH - ARROW_OFFSET
                 const endY = toNode.y + NODE_HEIGHT / 2
 
