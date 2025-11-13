@@ -176,9 +176,22 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
       pagesByLevel.get(level)!.push(page)
     })
   }
+
+  const parentNameByChild = new Map<string, string>()
+  if (data.connections && Array.isArray(data.connections)) {
+    data.connections.forEach((conn: any) => {
+      if (conn?.from && conn?.to && typeof conn.to === 'string' && typeof conn.from === 'string') {
+        if (!parentNameByChild.has(conn.to)) {
+          parentNameByChild.set(conn.to, conn.from)
+        }
+      }
+    })
+  }
+
+  const sortedLevels = Array.from(pagesByLevel.entries()).sort(([a], [b]) => a - b)
   
   // Generate nodes with coordinates
-  pagesByLevel.forEach((pages, level) => {
+  sortedLevels.forEach(([level, pages]) => {
     pages.forEach((page, index) => {
       const id = nodeId.toString()
       pageNameToId.set(page.name, id)
@@ -197,14 +210,38 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
         y = centerY + Math.sin(angle) * levelSpacing
       } else {
         // Level 2+ - find parent and position relative to it
-        const parentPage = data.pages.find((p: any) => p.name === page.parentId || p.isParent)
-        if (parentPage) {
-          const parentId = pageNameToId.get(parentPage.name)
+        const parentName = typeof page.parentId === 'string' && page.parentId.trim().length > 0
+          ? page.parentId
+          : parentNameByChild.get(page.name)
+        if (parentName) {
+          const parentId = pageNameToId.get(parentName)
           const parentNode = nodes.find(n => n.id === parentId)
           if (parentNode) {
-            const offset = (index - pages.length / 2) * nodeSpacing
+            const siblings = pages.filter((p: any) => {
+              const siblingParent = typeof p.parentId === 'string' && p.parentId.trim().length > 0
+                ? p.parentId
+                : parentNameByChild.get(p.name)
+              return siblingParent === parentName
+            })
+            const siblingIndex = siblings.indexOf(page)
+            const offset = (siblingIndex - siblings.length / 2 + 0.5) * nodeSpacing
             x = parentNode.x + offset
             y = parentNode.y + levelSpacing
+          }
+        }
+
+        if (x === centerX && y === centerY) {
+          // Fallback if parent not found
+          const parentCandidates = data.pages.filter((p: any) => p.isParent && p.level === level - 1)
+          if (parentCandidates.length > 0) {
+            const fallbackParent = parentCandidates[0]
+            const parentId = pageNameToId.get(fallbackParent.name)
+            const parentNode = nodes.find(n => n.id === parentId)
+            if (parentNode) {
+              const offset = (index - pages.length / 2) * nodeSpacing
+              x = parentNode.x + offset
+              y = parentNode.y + levelSpacing
+            }
           }
         }
       }
