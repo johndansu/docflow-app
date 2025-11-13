@@ -1082,7 +1082,53 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 )
               }))}
             </div>
+            <svg
+              className="absolute inset-0 pointer-events-none"
+              width={workspaceSize.width}
+              height={workspaceSize.height}
+            >
+              <defs>
+                <marker
+                  id="siteflow-arrow"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="9"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
+                </marker>
+              </defs>
+              {connections.map((connection, index) => {
+                const fromNode = nodes.find(node => node.id === connection.from)
+                const toNode = nodes.find(node => node.id === connection.to)
+
+                if (!fromNode || !toNode) return null
+
+                const startX = fromNode.x + NODE_WIDTH
+                const startY = fromNode.y + NODE_HEIGHT / 2
+                const endX = toNode.x - 12
+                const endY = toNode.y + NODE_HEIGHT / 2
+                const controlX = (startX + endX) / 2
+
+                const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
+
+                return (
+                  <path
+                    key={`${connection.from}-${connection.to}-${index}`}
+                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
+                    stroke={isActive ? '#fbbf24' : '#4b5563'}
+                    strokeWidth={isActive ? 2.5 : 1.6}
+                    fill="none"
+                    markerEnd="url(#siteflow-arrow)"
+                    opacity={0.75}
+                  />
+                )
+              })}
+            </svg>
           </div>
+        </div>
 
         {/* Context Menu */}
         {contextMenu && (
