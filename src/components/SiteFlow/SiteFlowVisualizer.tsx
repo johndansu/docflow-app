@@ -30,10 +30,10 @@ export interface SiteFlowHandle {
 
 const NODE_WIDTH = 260
 const NODE_HEIGHT = 110
-const TARGET_ZOOM = 0.5
-const CANVAS_PADDING = 300
-const HORIZONTAL_SPACING = NODE_WIDTH + 280
-const LEVEL_VERTICAL_SPACING = NODE_HEIGHT + 190
+const TARGET_ZOOM = 0.3
+const CANVAS_PADDING = 250
+const HORIZONTAL_SPACING = NODE_WIDTH + 220
+const LEAF_VERTICAL_SPACING = NODE_HEIGHT + 140
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -60,7 +60,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [historyIndex, setHistoryIndex] = useState(-1)
   const searchQuery: string = ''
   const canvasRef = useRef<HTMLDivElement>(null)
-  const editInputRef = useRef<HTMLInputElement>(null)
+  const editInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+  const handleEditRef = (element: HTMLInputElement | HTMLTextAreaElement | null) => {
+    editInputRef.current = element
+  }
   const canvasContainerRef = useRef<HTMLDivElement>(null)
   const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
 
@@ -753,19 +756,23 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const canvasHeight = rect.height
 
     const availableWidth = Math.max(canvasWidth / TARGET_ZOOM - CANVAS_PADDING * 2, HORIZONTAL_SPACING)
-    const availableHeight = Math.max(canvasHeight / TARGET_ZOOM - CANVAS_PADDING * 2, LEVEL_VERTICAL_SPACING)
+    const availableHeight = Math.max(canvasHeight / TARGET_ZOOM - CANVAS_PADDING * 2, LEAF_VERTICAL_SPACING)
 
     setNodes(prevNodes => {
       if (prevNodes.length === 0) {
         return prevNodes
       }
 
+      const nodesById = new Map<string, Node>(prevNodes.map(node => [String(node.id), node]))
       const childMap = new Map<string, string[]>()
       const incomingCount = new Map<string, number>()
 
       connections.forEach(({ from, to }) => {
         const fromId = String(from)
         const toId = String(to)
+        if (!nodesById.has(fromId) || !nodesById.has(toId)) {
+          return
+        }
         if (!childMap.has(fromId)) {
           childMap.set(fromId, [])
         }
@@ -782,6 +789,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         roots = [prevNodes[0]]
       }
 
+      roots.sort((a, b) => (a.y ?? 0) - (b.y ?? 0))
+
       const levelMap = new Map<string, number>()
       const queue: Array<{ id: string; depth: number }> = roots.map(root => ({
         id: String(root.id),
@@ -794,6 +803,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         const { id, depth } = queue.shift()!
         const children = childMap.get(id) ?? []
         children.forEach(childId => {
+          if (!nodesById.has(childId)) return
           const nextDepth = depth + 1
           const recorded = levelMap.get(childId)
           if (recorded === undefined || nextDepth > recorded) {
@@ -817,70 +827,92 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         maxDepth > 0 ? availableWidth / Math.max(maxDepth, 1) : HORIZONTAL_SPACING
       )
 
-      const levelNodes = new Map<number, Node[]>()
-      prevNodes.forEach(node => {
-        const depth = levelMap.get(String(node.id)) ?? 0
-        if (!levelNodes.has(depth)) {
-          levelNodes.set(depth, [])
-        }
-        levelNodes.get(depth)!.push(node)
-      })
-
-      let maxLevelCount = 0
-      levelNodes.forEach(nodesAtLevel => {
-        nodesAtLevel.sort((a, b) => a.y - b.y)
-        if (nodesAtLevel.length > maxLevelCount) {
-          maxLevelCount = nodesAtLevel.length
-        }
-      })
-
-      const verticalSpacing = Math.max(
-        LEVEL_VERTICAL_SPACING,
-        maxLevelCount > 1 ? availableHeight / Math.max(maxLevelCount - 1, 1) : LEVEL_VERTICAL_SPACING
-      )
-
+      const visited = new Set<string>()
       const positions = new Map<string, { x: number; y: number }>()
-      levelNodes.forEach((nodesAtLevel, level) => {
-        nodesAtLevel.forEach((node, index) => {
-          const x = CANVAS_PADDING + level * columnWidth
-          const y = index * verticalSpacing
-          positions.set(String(node.id), { x, y })
-        })
+      let nextLeafIndex = 0
+
+      const assignPositions = (id: string, fallbackDepth: number): number => {
+        if (visited.has(id)) {
+          const existing = positions.get(id)
+          return existing ? existing.y : nextLeafIndex * LEAF_VERTICAL_SPACING
+        }
+        visited.add(id)
+
+        const node = nodesById.get(id)
+        if (!node) {
+          const y = nextLeafIndex * LEAF_VERTICAL_SPACING
+          nextLeafIndex += 1
+          return y
+        }
+
+        const depth = levelMap.get(id) ?? fallbackDepth
+        const children = (childMap.get(id) ?? []).filter(childId => nodesById.has(childId))
+
+        const x = CANVAS_PADDING + depth * columnWidth
+
+        if (children.length === 0) {
+          const y = nextLeafIndex * LEAF_VERTICAL_SPACING
+          nextLeafIndex += 1
+          positions.set(id, { x, y })
+          return y
+        }
+
+        const childYs = children.map(childId => assignPositions(childId, depth + 1))
+        const minY = Math.min(...childYs)
+        const maxY = Math.max(...childYs)
+        const y = (minY + maxY) / 2
+        positions.set(id, { x, y })
+        return y
+      }
+
+      roots.forEach(root => {
+        assignPositions(String(root.id), levelMap.get(String(root.id)) ?? 0)
       })
 
-      const baseYValues = Array.from(positions.values()).map(pos => pos.y)
-      const minBaseY = baseYValues.length > 0 ? Math.min(...baseYValues) : 0
-      const maxBaseY = baseYValues.length > 0 ? Math.max(...baseYValues) : 0
-      const totalHeight = maxBaseY - minBaseY + NODE_HEIGHT
-      const extraVerticalSpace = availableHeight - totalHeight
-      const verticalShift = extraVerticalSpace > 0
-        ? CANVAS_PADDING + extraVerticalSpace / 2 - minBaseY
-        : CANVAS_PADDING - minBaseY
+      prevNodes.forEach(node => {
+        const id = String(node.id)
+        if (!visited.has(id)) {
+          assignPositions(id, levelMap.get(id) ?? 0)
+        }
+      })
 
       const positionedNodes = prevNodes.map(node => {
-        const id = String(node.id)
-        const pos = positions.get(id)
+        const pos = positions.get(String(node.id))
         if (!pos) return node
-        const depth = levelMap.get(id) ?? (node.level ?? 0)
+        const depth = levelMap.get(String(node.id)) ?? (node.level ?? 0)
         return {
           ...node,
           level: depth,
           x: pos.x,
-          y: pos.y + verticalShift,
+          y: pos.y,
         }
       })
 
-      const maxX = Math.max(...positionedNodes.map(node => node.x + NODE_WIDTH))
-      const maxY = Math.max(...positionedNodes.map(node => node.y + NODE_HEIGHT))
+      const yValues = positionedNodes.map(node => node.y)
+      const minY = yValues.length > 0 ? Math.min(...yValues) : 0
+      const maxY = yValues.length > 0 ? Math.max(...yValues) : 0
+      const totalHeight = maxY - minY + NODE_HEIGHT
+      const extraVerticalSpace = availableHeight - totalHeight
+      const verticalShift = extraVerticalSpace > 0
+        ? CANVAS_PADDING + extraVerticalSpace / 2 - minY
+        : CANVAS_PADDING - minY
+
+      const shiftedNodes = positionedNodes.map(node => ({
+        ...node,
+        y: node.y + verticalShift,
+      }))
+
+      const maxX = Math.max(...shiftedNodes.map(node => node.x + NODE_WIDTH))
+      const maxShiftedY = Math.max(...shiftedNodes.map(node => node.y + NODE_HEIGHT))
       const requiredWidth = maxX + CANVAS_PADDING
-      const requiredHeight = maxY + CANVAS_PADDING
+      const requiredHeight = maxShiftedY + CANVAS_PADDING
 
       setWorkspaceSize(current => ({
         width: Math.max(current.width, Math.ceil(requiredWidth)),
         height: Math.max(current.height, Math.ceil(requiredHeight)),
       }))
 
-      return positionedNodes
+      return shiftedNodes
     })
 
     setZoom(TARGET_ZOOM)
@@ -1133,241 +1165,190 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 )
               })}
             </svg>
-            {filteredNodes.length === 0 && searchQuery ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-sm text-mid-grey">No nodes match "{searchQuery}"</p>
-              </div>
-            ) : filteredNodes.length === 0 ? (
+            {filteredNodes.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <p className="text-sm text-mid-grey">No nodes to display</p>
               </div>
             ) : (
-              filteredNodes.map((node) => {
+              filteredNodes.map(node => {
                 const isHighlighted = searchQuery && (
                   node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  node.description.toLowerCase().includes(searchQuery.toLowerCase())
+                  (node.description ?? '').toLowerCase().includes(searchQuery.toLowerCase())
                 )
+                const isSelected = selectedNodes.has(node.id)
+                const isEditing = editingNode === node.id
+
                 return (
                   <div
                     key={node.id}
-                    className={`absolute cursor-move ${selectedNodes.has(node.id) ? 'ring-2 ring-amber-gold' : ''} ${draggingNode === node.id ? 'opacity-80 z-50' : ''} ${connectingFrom === node.id ? 'ring-2 ring-amber-gold ring-offset-2' : ''}`}
-                    style={{
-                      left: `${node.x}px`,
-                      top: `${node.y}px`,
-                      zIndex: 1,
-                    }}
-                    onMouseDown={(e) => {
-                      if (connectingFrom && connectingFrom !== node.id && connectingFrom !== 'connecting') {
-                        handleNodeClick(node.id, e)
-                      } else if (!connectingFrom) {
+                    className={`absolute cursor-move transition-transform duration-150 ${isSelected ? 'z-30' : 'z-10'} ${draggingNode === node.id ? 'opacity-80' : ''}`}
+                    style={{ left: `${node.x}px`, top: `${node.y}px` }}
+                    onMouseDown={e => {
+                      if (!connectingFrom) {
                         handleMouseDown(e, node.id)
                       }
                     }}
-                    onClick={(e) => {
+                    onClick={e => {
                       e.stopPropagation()
-                      if (connectingFrom) {
-                        handleNodeClick(node.id, e)
-                      } else {
-                        // Regular click - select node
-                        if (e.shiftKey) {
-                          setSelectedNodes(prev => {
-                            const newSet = new Set(prev)
-                            if (newSet.has(node.id)) {
-                              newSet.delete(node.id)
-                            } else {
-                              newSet.add(node.id)
-                            }
-                            return newSet
-                          })
-                        } else {
-                          setSelectedNodes(new Set([node.id]))
-                        }
-                      }
+                      handleNodeClick(node.id, e)
                     }}
-                    onDoubleClick={(e) => {
+                    onDoubleClick={e => {
                       e.stopPropagation()
-                      if (!connectingFrom) {
-                        handleNodeClick(node.id, e)
-                      }
+                      handleNodeClick(node.id, e)
                     }}
-                    onContextMenu={(e) => handleContextMenu(e, node.id)}
+                    onContextMenu={e => handleContextMenu(e, node.id)}
                   >
-                    <div className={`bg-dark-card border rounded-lg p-4 hover:shadow-lg transition-shadow ${
-                      node.level === 0
-                        ? 'bg-amber-gold/5 border-2 border-amber-gold/30'
-                        : isHighlighted
-                        ? 'border-2 border-amber-gold/50 bg-amber-gold/10'
-                        : 'border-divider'
-                    }`} style={{ width: `${NODE_WIDTH}px`, minHeight: `${NODE_HEIGHT}px` }}>
-                      {editingNode === node.id && editingField === 'name' ? (
-                        <input
-                          ref={editInputRef}
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={handleEditSave}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleEditSave()
-                            if (e.key === 'Escape') handleEditCancel()
-                          }}
-                          className="w-full bg-dark-surface border border-amber-gold/50 rounded px-2 py-1 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-amber-gold/50"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <h3 
-                          className="font-heading font-semibold text-base text-charcoal mb-1 cursor-text"
-                          onDoubleClick={(e) => {
+                    <div
+                      className={`w-[260px] rounded-xl border border-divider/50 bg-dark-card px-4 py-3 shadow-[0_20px_40px_rgba(0,0,0,0.35)] transition-all ${
+                        isSelected ? 'ring-2 ring-amber-gold ring-offset-2 ring-offset-[#121212]' : ''
+                      } ${isHighlighted ? 'border-amber-gold/60' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wide text-mid-grey/70">
+                            {node.level === 0 ? 'Root' : `Level ${node.level ?? 0}`}
+                          </p>
+                          <h3 className="text-sm font-semibold text-white line-clamp-2">
+                            {node.name || 'Untitled Page'}
+                          </h3>
+                        </div>
+                        <button
+                          className="shrink-0 rounded-full border border-divider/40 bg-dark-surface px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-mid-grey hover:border-amber-gold/60 hover:text-amber-gold"
+                          onClick={e => {
                             e.stopPropagation()
-                            setEditingNode(node.id)
-                            setEditingField('name')
-                            setEditValue(node.name)
+                            setConnectingFrom(prev => (prev === node.id ? null : node.id))
                           }}
                         >
-                          {node.name}
-                        </h3>
-                      )}
-                      {editingNode === node.id && editingField === 'description' ? (
-                        <input
-                          ref={editInputRef}
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={handleEditSave}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleEditSave()
-                            if (e.key === 'Escape') handleEditCancel()
-                          }}
-                          className="w-full bg-dark-surface border border-amber-gold/50 rounded px-2 py-1 text-xs text-mid-grey focus:outline-none focus:ring-2 focus:ring-amber-gold/50"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      ) : (
-                        <p 
-                          className="text-xs text-mid-grey cursor-text"
-                          onDoubleClick={(e) => {
-                            e.stopPropagation()
-                            setEditingNode(node.id)
-                            setEditingField('description')
-                            setEditValue(node.description)
-                          }}
-                        >
-                          {node.description}
-                        </p>
-                      )}
+                          Link
+                        </button>
+                      </div>
+                      <p className="mt-3 text-xs leading-relaxed text-mid-grey line-clamp-4">
+                        {node.description || 'Click to add details for this page.'}
+                      </p>
+                      <div className="mt-4 flex items-center justify-between text-[11px] text-mid-grey/80">
+                        <span>{connections.filter(c => c.from === node.id).length} outgoing • {connections.filter(c => c.to === node.id).length} incoming</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="rounded-md bg-dark-surface px-2 py-1 text-[11px] font-medium text-mid-grey hover:text-white"
+                            onClick={e => {
+                              e.stopPropagation()
+                              setEditingNode(node.id)
+                              setEditingField('name')
+                              setEditValue(node.name)
+                            }}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            className="rounded-md bg-dark-surface px-2 py-1 text-[11px] font-medium text-mid-grey hover:text-amber-gold"
+                            onClick={e => {
+                              e.stopPropagation()
+                              addChildPage(node.id)
+                            }}
+                          >
+                            Add child
+                          </button>
+                        </div>
+                      </div>
                     </div>
+                    {isEditing && (
+                      <div className="absolute inset-0 rounded-xl border-2 border-amber-gold/60" />
+                    )}
                   </div>
                 )
               })
             )}
           </div>
         </div>
-
-        {/* Context Menu */}
-        {contextMenu && (
-          <div
-            className="fixed bg-dark-card border border-divider rounded-lg shadow-lg z-50"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {contextMenu.nodeId ? (
-              <>
-                <button
-                  onClick={() => {
-                    const node = nodes.find(n => n.id === contextMenu.nodeId)
-                    if (node) {
-                      setEditingNode(contextMenu.nodeId!)
-                      setEditingField('name')
-                      setEditValue(node.name)
-                    }
-                    setContextMenu(null)
-                  }}
-                  className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
-                >
-                  Edit Name
-                </button>
-                <button
-                  onClick={() => {
-                    const node = nodes.find(n => n.id === contextMenu.nodeId)
-                    if (node) {
-                      setEditingNode(contextMenu.nodeId!)
-                      setEditingField('description')
-                      setEditValue(node.description)
-                    }
-                    setContextMenu(null)
-                  }}
-                  className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
-                >
-                  Edit Description
-                </button>
-                <button
-                  onClick={() => {
-                    if (contextMenu.nodeId) {
-                      setConnectingFrom(contextMenu.nodeId)
-                    }
-                    setContextMenu(null)
-                  }}
-                  className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
-                >
-                  Connect From Here
-                </button>
-                <button
-                  onClick={() => {
-                    if (contextMenu.nodeId) {
-                      addChildPage(contextMenu.nodeId)
-                    }
-                  }}
-                  className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
-                >
-                  Add Child Page
-                </button>
-                <div className="border-t border-divider/50 my-1"></div>
-                <button
-                  onClick={() => {
-                    if (contextMenu.nodeId) {
-                      deleteNode(contextMenu.nodeId)
-                    }
-                  }}
-                  className="block w-full text-left px-4 py-2 hover:bg-red-500/10 text-sm text-red-400"
-                >
-                  Delete
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => {
-                  if (canvasRef.current) {
-                    const rect = canvasRef.current.getBoundingClientRect()
-                    addNewNode(contextMenu.x - rect.left, contextMenu.y - rect.top)
-                  }
-                }}
-                className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal"
-              >
-                Add New Page
-              </button>
-            )}
-            <button
-              onClick={() => setContextMenu(null)}
-              className="block w-full text-left px-4 py-2 hover:bg-dark-surface text-sm text-charcoal border-t border-divider/50 mt-1"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {/* Instructions */}
-        {connectingFrom && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-amber-gold/20 border border-amber-gold/50 rounded-lg px-4 py-2 text-sm text-amber-gold z-50">
-            {connectingFrom === 'connecting' 
-              ? 'Click a node to connect from, then click another to connect to'
-              : `Connecting from "${nodes.find(n => n.id === connectingFrom)?.name}". Click target node or cancel.`}
-          </div>
-        )}
-
-        {/* Minimap placeholder removed for simplicity */}
       </div>
-
-      {/* Simple Instructions */}
-      <div className="mt-2 text-xs text-mid-grey text-center">
-        Double-click nodes to edit • Right-click for menu • Drag canvas to pan • Use the ± buttons to zoom
+      {contextMenu && (
+        <div
+          className="fixed z-50 w-48 rounded-lg border border-divider/40 bg-dark-card p-2 text-sm text-white shadow-xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-dark-surface"
+            onClick={() => {
+              if (contextMenu.nodeId) {
+                addChildPage(contextMenu.nodeId)
+              } else if (canvasRef.current) {
+                const rect = canvasRef.current.getBoundingClientRect()
+                addNewNode(rect.width / 2, rect.height / 2)
+              }
+              setContextMenu(null)
+            }}
+          >
+            + Add child page
+          </button>
+          {contextMenu.nodeId && (
+            <>
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-dark-surface"
+                onClick={() => {
+                  const node = nodes.find(n => n.id === contextMenu.nodeId)
+                  if (node) {
+                    setEditingNode(node.id)
+                    setEditingField('name')
+                    setEditValue(node.name)
+                  }
+                  setContextMenu(null)
+                }}
+              >
+                ✏️ Rename
+              </button>
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-red-400 hover:bg-red-500/10"
+                onClick={() => {
+                  deleteNode(contextMenu.nodeId!)
+                }}
+              >
+                🗑 Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {editingNode && editingField && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-divider/40 bg-dark-card p-6 text-white shadow-2xl">
+            <h3 className="mb-4 text-base font-semibold">
+              {editingField === 'name' ? 'Rename page' : 'Edit description'}
+            </h3>
+            {editingField === 'name' ? (
+              <input
+                ref={handleEditRef}
+                className="w-full rounded-lg border border-divider/40 bg-dark-surface px-3 py-2 text-sm text-white focus:border-amber-gold focus:outline-none"
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+              />
+            ) : (
+              <textarea
+                ref={handleEditRef}
+                className="w-full rounded-lg border border-divider/40 bg-dark-surface px-3 py-2 text-sm text-white focus:border-amber-gold focus:outline-none"
+                rows={4}
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+              />
+            )}
+            <div className="mt-6 flex items-center justify-end gap-3 text-sm">
+              <button
+                className="rounded-md px-4 py-2 text-mid-grey hover:text-white"
+                onClick={handleEditCancel}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-md bg-amber-gold px-4 py-2 font-semibold text-black hover:bg-amber-gold/90"
+                onClick={handleEditSave}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="pointer-events-none mt-3 flex items-center justify-center text-[11px] uppercase tracking-wide text-mid-grey/70">
+        <span>Drag nodes to rearrange • Shift+Click to multi-select • Right-click for options</span>
       </div>
     </div>
   )
