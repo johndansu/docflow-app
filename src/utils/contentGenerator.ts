@@ -27,8 +27,77 @@ const STOP_WORDS = new Set([
 
 const SUFFIXES = ['Hub', 'Flow', 'Deck', 'Nest', 'Suite', 'Portal', 'Loop', 'Forge', 'Atlas', 'Pulse', 'Space', 'Wave', 'Pilot', 'Core', 'Studio', 'Works']
 
+const KEYWORD_REPLACEMENTS: Record<string, string> = {
+  kids: 'Kiddo',
+  kid: 'Kiddo',
+  child: 'Playful',
+  children: 'Playful',
+  shopping: 'Shopper',
+  shop: 'Shopper',
+  notebook: 'Notion',
+  notes: 'Notion',
+  task: 'Tasker',
+  tasks: 'Tasker',
+  project: 'Project',
+  manager: 'Manager',
+  learning: 'Learner',
+  finance: 'Ledger',
+  budget: 'Budgeteer',
+  health: 'Vital',
+  fitness: 'Fit',
+  travel: 'Voyage',
+  social: 'Circle',
+  education: 'Edu',
+  ecommerce: 'Commerce',
+  shopify: 'Shopify'
+}
+
 const toTitleCase = (word: string) =>
   word.replace(/^[a-z]/, c => c.toUpperCase()).replace(/-(\w)/g, (_, chr) => `-${chr.toUpperCase()}`)
+
+const transformKeyword = (word: string): string => {
+  const lower = word.toLowerCase()
+  if (KEYWORD_REPLACEMENTS[lower]) {
+    return KEYWORD_REPLACEMENTS[lower]
+  }
+  if (lower.endsWith('ing')) {
+    return toTitleCase(lower.replace(/ing$/, 'er'))
+  }
+  if (lower.endsWith('ers')) {
+    return toTitleCase(lower.replace(/ers$/, 'er'))
+  }
+  if (lower.endsWith('ies')) {
+    return toTitleCase(lower.replace(/ies$/, 'y'))
+  }
+  if (lower.endsWith('s') && lower.length > 3) {
+    return toTitleCase(lower.slice(0, -1))
+  }
+  return toTitleCase(lower)
+}
+
+const buildNameFromKeywords = (keywords: string[]): string => {
+  if (keywords.length === 0) {
+    return 'Untitled Project'
+  }
+
+  const transformed = keywords.map(transformKeyword)
+  const unique = transformed.filter((value, index, arr) => value && arr.indexOf(value) === index)
+
+  if (unique.length === 1) {
+    return `${unique[0]} ${SUFFIXES[(unique[0].charCodeAt(0) + unique[0].length) % SUFFIXES.length]}`
+  }
+
+  const base = unique[0]
+  const second = unique[1] || SUFFIXES[(base.charCodeAt(0) + base.length) % SUFFIXES.length]
+  const suffixIndex = (base.charCodeAt(0) + (unique[1]?.charCodeAt(0) ?? 0) + unique.length) % SUFFIXES.length
+  const suffix = SUFFIXES[suffixIndex]
+
+  if (second === base) {
+    return `${base} ${suffix}`
+  }
+
+  return `${base} ${second} ${suffix}`.replace(/\b(App|Application)\b/gi, '').replace(/\s+/g, ' ').trim()
+}
 
 const suggestProjectName = (description: string): string => {
   if (!description || !description.trim()) {
@@ -63,20 +132,7 @@ const suggestProjectName = (description: string): string => {
     return fallback || 'Untitled Project'
   }
 
-  const base = toTitleCase(keywords[0])
-  const secondary = keywords[1] ? toTitleCase(keywords[1]) : ''
-  const charSum = base.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  const suffix = SUFFIXES[charSum % SUFFIXES.length]
-
-  const proposed = [base]
-  if (secondary) {
-    proposed.push(secondary)
-  } else {
-    proposed.push(suffix)
-  }
-
-  const projectName = proposed.join(' ').replace(/\b(App|Application)\b/gi, '').replace(/\s+/g, ' ').trim()
-  return projectName || 'Untitled Project'
+  return buildNameFromKeywords(keywords.slice(0, 4))
 }
 
 export const extractInfo = (description: string): ExtractedInfo => {

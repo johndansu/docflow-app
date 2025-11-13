@@ -1046,11 +1046,20 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
                 if (!fromNode || !toNode) return null
 
-                const startX = fromNode.x + NODE_WIDTH
+                const isForward = fromNode.x <= toNode.x
+                const startX = fromNode.x + (isForward ? NODE_WIDTH : 0)
                 const startY = fromNode.y + NODE_HEIGHT / 2
-                const endX = toNode.x - 12
+                const endX = toNode.x + (isForward ? 0 : NODE_WIDTH)
                 const endY = toNode.y + NODE_HEIGHT / 2
-                const controlX = (startX + endX) / 2
+
+                const horizontalDistance = Math.max(Math.abs(endX - startX), 80)
+                const verticalDistance = endY - startY
+                const controlOffset = horizontalDistance / 2
+
+                const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
+                const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
+                const controlY1 = startY + verticalDistance * 0.25
+                const controlY2 = endY - verticalDistance * 0.25
 
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
                 const animationDuration = isActive ? '4s' : '8s'
@@ -1058,7 +1067,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 return (
                   <path
                     key={`${connection.from}-${connection.to}-${index}`}
-                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
+                    d={`M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`}
                     stroke="url(#siteflow-gradient)"
                     strokeWidth={isActive ? 3 : 1.8}
                     fill="none"
