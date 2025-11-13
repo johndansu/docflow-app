@@ -36,6 +36,11 @@ const TARGET_ZOOM = 0.3
 const CANVAS_PADDING = 250
 const HORIZONTAL_SPACING = NODE_WIDTH + 220
 const LEAF_VERTICAL_SPACING = NODE_HEIGHT + 140
+const CONNECTION_START_GAP = 32
+const CONNECTION_END_GAP = 36
+const CONNECTION_MIN_HORIZONTAL_DISTANCE = 140
+const CONNECTION_CONTROL_MIN = 120
+const CONNECTION_SHORT_LINK_OFFSET = 90
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -1092,9 +1097,46 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         y: node.y + verticalShift,
       }))
 
-      const maxX = Math.max(...shiftedNodes.map(node => node.x + NODE_WIDTH))
+      const shiftedNodesById = new Map<string, Node>(shiftedNodes.map(node => [String(node.id), node]))
+
+      const maxNodeExtentX = Math.max(...shiftedNodes.map(node => node.x + NODE_WIDTH))
+      let maxConnectionExtentX = maxNodeExtentX
+
+      connections.forEach(connection => {
+        const fromNode = shiftedNodesById.get(String(connection.from))
+        const toNode = shiftedNodesById.get(String(connection.to))
+        if (!fromNode || !toNode) {
+          return
+        }
+
+        const isForward = fromNode.x <= toNode.x
+        const startX = isForward
+          ? fromNode.x + NODE_WIDTH + CONNECTION_START_GAP
+          : fromNode.x - CONNECTION_START_GAP
+        const endX = isForward
+          ? toNode.x - CONNECTION_END_GAP
+          : toNode.x + NODE_WIDTH + CONNECTION_END_GAP
+        const startY = fromNode.y + NODE_HEIGHT / 2
+        const endY = toNode.y + NODE_HEIGHT / 2
+
+        const horizontalDistance = Math.max(Math.abs(endX - startX), CONNECTION_MIN_HORIZONTAL_DISTANCE)
+        const verticalDistance = endY - startY
+        const midX = (startX + endX) / 2
+        const isShortLink = horizontalDistance < 200 && Math.abs(verticalDistance) < 140
+
+        if (isShortLink) {
+          const controlX = midX + CONNECTION_SHORT_LINK_OFFSET
+          maxConnectionExtentX = Math.max(maxConnectionExtentX, startX, endX, controlX)
+        } else {
+          const controlOffset = Math.max(horizontalDistance * 0.5, CONNECTION_CONTROL_MIN)
+          const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
+          const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
+          maxConnectionExtentX = Math.max(maxConnectionExtentX, startX, endX, controlX1, controlX2)
+        }
+      })
+
       const maxShiftedY = Math.max(...shiftedNodes.map(node => node.y + NODE_HEIGHT))
-      const requiredWidth = maxX + CANVAS_PADDING
+      const requiredWidth = maxConnectionExtentX + CANVAS_PADDING
       const requiredHeight = maxShiftedY + CANVAS_PADDING
 
       setWorkspaceSize(current => ({
@@ -1302,23 +1344,21 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
                 if (!fromNode || !toNode) return null
 
-                const START_GAP = 32
-                const END_GAP = 36
                 const isForward = fromNode.x <= toNode.x
                 const startX = isForward
-                  ? fromNode.x + NODE_WIDTH + START_GAP
-                  : fromNode.x - START_GAP
+                  ? fromNode.x + NODE_WIDTH + CONNECTION_START_GAP
+                  : fromNode.x - CONNECTION_START_GAP
                 const startY = fromNode.y + NODE_HEIGHT / 2
                 const endX = isForward
-                  ? toNode.x - END_GAP
-                  : toNode.x + NODE_WIDTH + END_GAP
+                  ? toNode.x - CONNECTION_END_GAP
+                  : toNode.x + NODE_WIDTH + CONNECTION_END_GAP
                 const endY = toNode.y + NODE_HEIGHT / 2
 
-                const horizontalDistance = Math.max(Math.abs(endX - startX), 140)
+                const horizontalDistance = Math.max(Math.abs(endX - startX), CONNECTION_MIN_HORIZONTAL_DISTANCE)
                 const verticalDistance = endY - startY
                 const midX = (startX + endX) / 2
                 const midY = (startY + endY) / 2
-                const controlOffset = Math.max(horizontalDistance * 0.5, 120)
+                const controlOffset = Math.max(horizontalDistance * 0.5, CONNECTION_CONTROL_MIN)
 
                 const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
                 const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
@@ -1327,7 +1367,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
                 const isShortLink = horizontalDistance < 200 && Math.abs(verticalDistance) < 140
                 const pathD = isShortLink
-                  ? `M ${startX} ${startY} Q ${isForward ? midX + 90 : midX - 90} ${midY} ${endX} ${endY}`
+                  ? `M ${startX} ${startY} Q ${midX + CONNECTION_SHORT_LINK_OFFSET} ${midY} ${endX} ${endY}`
                   : `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
 
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
