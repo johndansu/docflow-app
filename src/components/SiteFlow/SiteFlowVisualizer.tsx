@@ -78,8 +78,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const nodesByLevel = new Map<number, Node[]>()
+    const nodesById = new Map<string, Node>()
     nodes.forEach(node => {
       const level = node.level ?? 0
+      nodesById.set(node.id, node)
       if (!nodesByLevel.has(level)) {
         nodesByLevel.set(level, [])
       }
@@ -89,7 +91,15 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     nodes.forEach(node => {
       const nodeLevel = node.level ?? 0
       if (nodeLevel <= 0) return
-      if ((incomingCounts.get(node.id) ?? 0) > 0) return
+
+      const hasParentAtPrevLevel = result.some(conn => {
+        if (conn.to !== node.id) return false
+        const parentNode = nodesById.get(conn.from)
+        if (!parentNode) return false
+        const parentLevel = parentNode.level ?? 0
+        return parentLevel === nodeLevel - 1
+      })
+      if (hasParentAtPrevLevel) return
 
       const desiredParentLevel = nodeLevel - 1
       const potentialParents = nodesByLevel.get(desiredParentLevel) ?? []
