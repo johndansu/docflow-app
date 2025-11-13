@@ -67,6 +67,17 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }), [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const styleId = 'siteflow-supabase-animation'
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = `@keyframes siteflowSupabaseDash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -400; } }`
+      document.head.appendChild(style)
+    }
+  }, [])
+
+  useEffect(() => {
     // If initial site flow is provided, use it and don't regenerate
     if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
       setNodes(initialSiteFlow.nodes)
@@ -972,6 +983,11 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
               }}
             >
               <defs>
+                <linearGradient id="siteflow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#3ECF8E" />
+                  <stop offset="50%" stopColor="#4E46E5" />
+                  <stop offset="100%" stopColor="#3ECF8E" />
+                </linearGradient>
                 <marker
                   id="siteflow-arrow"
                   markerWidth="12"
@@ -994,6 +1010,28 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 >
                   <path d="M12,0 L0,6 L12,12 z" fill="#fbbf24" />
                 </marker>
+                <marker
+                  id="siteflow-arrow-gradient"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="9"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L12,6 L0,12 z" fill="url(#siteflow-gradient)" />
+                </marker>
+                <marker
+                  id="siteflow-arrow-start-gradient"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="3"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M12,0 L0,6 L12,12 z" fill="url(#siteflow-gradient)" />
+                </marker>
               </defs>
               {connections.map((connection, index) => {
                 const fromNode = nodes.find(node => node.id === connection.from)
@@ -1013,12 +1051,16 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   <path
                     key={`${connection.from}-${connection.to}-${index}`}
                     d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
-                    stroke={isActive ? '#fbbf24' : '#4b5563'}
-                    strokeWidth={isActive ? 2.5 : 1.6}
+                    stroke={isActive ? '#fbbf24' : 'url(#siteflow-gradient)'}
+                    strokeWidth={isActive ? 2.5 : 1.8}
                     fill="none"
-                    markerStart="url(#siteflow-arrow-start)"
-                    markerEnd="url(#siteflow-arrow)"
-                    opacity={0.75}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray={isActive ? undefined : '20 16'}
+                    style={isActive ? undefined : { animation: 'siteflowSupabaseDash 8s linear infinite' }}
+                    markerStart={isActive ? 'url(#siteflow-arrow-start)' : 'url(#siteflow-arrow-start-gradient)'}
+                    markerEnd={isActive ? 'url(#siteflow-arrow)' : 'url(#siteflow-arrow-gradient)'}
+                    opacity={isActive ? 0.9 : 0.85}
                   />
                 )
               })}
