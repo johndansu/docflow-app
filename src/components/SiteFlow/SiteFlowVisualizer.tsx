@@ -97,19 +97,18 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       incomingSources.get(conn.to)!.add(conn.from)
     })
 
-    const rootCandidates = new Set<string>()
+    const explicitRootIds = new Set<string>()
     nodes.forEach(node => {
       const explicitLevel = node.level
       if (explicitLevel === 0) {
-        rootCandidates.add(node.id)
+        explicitRootIds.add(node.id)
       }
     })
-    nodes.forEach(node => {
-      if (!incomingSources.has(node.id)) {
-        rootCandidates.add(node.id)
-      }
-    })
-    if (rootCandidates.size === 0 && nodes.length > 0) {
+
+    const rootCandidates = new Set<string>()
+    if (explicitRootIds.size > 0) {
+      explicitRootIds.forEach(id => rootCandidates.add(id))
+    } else if (nodes.length > 0) {
       rootCandidates.add(nodes[0].id)
     }
 
@@ -152,6 +151,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const effectiveLevels = new Map<string, number>()
+    const hasExplicitRoot = explicitRootIds.size > 0 || rootCandidates.size > 0
     nodes.forEach(node => {
       if (typeof node.level === 'number') {
         effectiveLevels.set(node.id, node.level)
@@ -160,7 +160,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       } else if (rootCandidates.has(node.id)) {
         effectiveLevels.set(node.id, 0)
       } else {
-        effectiveLevels.set(node.id, bucketIndexByNode.get(node.id) ?? 1)
+        const columnLevel = bucketIndexByNode.get(node.id)
+        if (hasExplicitRoot) {
+          effectiveLevels.set(node.id, Math.max(columnLevel ?? 1, 1))
+        } else {
+          effectiveLevels.set(node.id, columnLevel ?? 0)
+        }
       }
     })
 
