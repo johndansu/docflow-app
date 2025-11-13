@@ -1060,7 +1060,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   markerHeight="12"
                   refX="9"
                   refY="6"
-                  orient="auto"
+                  orient="auto-start-reverse"
                   markerUnits="strokeWidth"
                 >
                   <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
@@ -1069,12 +1069,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   id="siteflow-arrow-start"
                   markerWidth="12"
                   markerHeight="12"
-                  refX="3"
+                  refX="9"
                   refY="6"
-                  orient="auto"
+                  orient="auto-start-reverse"
                   markerUnits="strokeWidth"
                 >
-                  <path d="M12,0 L0,6 L12,12 z" fill="#fbbf24" />
+                  <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
                 </marker>
                 <marker
                   id="siteflow-arrow-gradient"
@@ -1082,7 +1082,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   markerHeight="12"
                   refX="9"
                   refY="6"
-                  orient="auto"
+                  orient="auto-start-reverse"
                   markerUnits="strokeWidth"
                 >
                   <path d="M0,0 L12,6 L0,12 z" fill="url(#siteflow-gradient)" />
@@ -1091,12 +1091,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                   id="siteflow-arrow-start-gradient"
                   markerWidth="12"
                   markerHeight="12"
-                  refX="3"
+                  refX="9"
                   refY="6"
-                  orient="auto"
+                  orient="auto-start-reverse"
                   markerUnits="strokeWidth"
                 >
-                  <path d="M12,0 L0,6 L12,12 z" fill="url(#siteflow-gradient)" />
+                  <path d="M0,0 L12,6 L0,12 z" fill="url(#siteflow-gradient)" />
                 </marker>
                 <filter id="siteflow-glow" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
@@ -1112,31 +1112,32 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
                 if (!fromNode || !toNode) return null
 
-                const ARROW_OFFSET = 18
                 const isForward = fromNode.x <= toNode.x
+                const OUTBOUND_GAP = 28
+                const INBOUND_GAP = 32
                 const startX = isForward
-                  ? fromNode.x + NODE_WIDTH - ARROW_OFFSET
-                  : fromNode.x + ARROW_OFFSET
+                  ? fromNode.x + NODE_WIDTH + OUTBOUND_GAP
+                  : fromNode.x - OUTBOUND_GAP
                 const startY = fromNode.y + NODE_HEIGHT / 2
                 const endX = isForward
-                  ? toNode.x - ARROW_OFFSET
-                  : toNode.x + NODE_WIDTH - ARROW_OFFSET
+                  ? toNode.x - INBOUND_GAP
+                  : toNode.x + NODE_WIDTH + INBOUND_GAP
                 const endY = toNode.y + NODE_HEIGHT / 2
 
-                const horizontalDistance = Math.max(Math.abs(endX - startX), 60)
+                const horizontalDistance = Math.max(Math.abs(endX - startX), 120)
                 const verticalDistance = endY - startY
                 const midX = (startX + endX) / 2
                 const midY = (startY + endY) / 2
-                const controlOffset = Math.max(horizontalDistance / 2, 90)
+                const controlOffset = Math.max(horizontalDistance * 0.45, 120)
 
                 const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
                 const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
                 const controlY1 = startY + verticalDistance * 0.25
                 const controlY2 = endY - verticalDistance * 0.25
 
-                const isShortLink = horizontalDistance < 140 && Math.abs(verticalDistance) < 120
+                const isShortLink = horizontalDistance < 180 && Math.abs(verticalDistance) < 120
                 const pathD = isShortLink
-                  ? `M ${startX} ${startY} Q ${isForward ? midX + 60 : midX - 60} ${midY} ${endX} ${endY}`
+                  ? `M ${startX} ${startY} Q ${isForward ? midX + 80 : midX - 80} ${midY} ${endX} ${endY}`
                   : `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
 
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
