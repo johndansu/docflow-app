@@ -843,27 +843,31 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       return { ...node, x: pos.x, y: pos.y }
     })
 
-    const allX = laidOut.map(n => n.x)
-    const allY = laidOut.map(n => n.y)
-    const maxX = Math.max(...allX, 0)
-    const maxY = Math.max(...allY, 0)
-    const widthNeeded = maxX + NODE_WIDTH + padding
-    const heightNeeded = maxY + NODE_HEIGHT + padding
-    const newWidth = Math.max(2800, widthNeeded)
-    const newHeight = Math.max(1800, heightNeeded)
-    setWorkspaceSize({ width: newWidth, height: newHeight })
+    const minY = Math.min(...laidOut.map(node => node.y))
+    const maxY = Math.max(...laidOut.map(node => node.y + NODE_HEIGHT))
+    const currentHeight = maxY - minY
+    const extraSpace = availableHeight - currentHeight
+    const verticalShift = extraSpace > 0 ? extraSpace / 2 - minY + padding : -minY + padding
 
-    setNodes(laidOut)
+    const shiftedNodes = laidOut.map(node => ({
+      ...node,
+      y: node.y + verticalShift,
+    }))
 
-    const centerNodeX = (Math.min(...allX) + Math.max(...allX)) / 2
-    const centerNodeY = (Math.min(...allY) + Math.max(...allY)) / 2
+    const minX = Math.min(...shiftedNodes.map(node => node.x))
+    const maxX = Math.max(...shiftedNodes.map(node => node.x + NODE_WIDTH))
+    const finalMinY = Math.min(...shiftedNodes.map(node => node.y))
+    const finalMaxY = Math.max(...shiftedNodes.map(node => node.y + NODE_HEIGHT))
 
-    setPanOffset({ x: 0, y: 0 })
-    setZoom(targetZoom)
+    const requiredWidth = maxX - minX + padding * 2
+    const requiredHeight = finalMaxY - finalMinY + padding * 2
 
-    const scrollLeft = Math.max(0, centerNodeX * targetZoom - canvasWidth / 2)
-    const scrollTop = Math.max(0, centerNodeY * targetZoom - canvasHeight / 2)
-    canvasRef.current.scrollTo({ left: scrollLeft, top: scrollTop })
+    setWorkspaceSize(prev => ({
+      width: Math.max(prev.width, Math.ceil(requiredWidth)),
+      height: Math.max(prev.height, Math.ceil(requiredHeight)),
+    }))
+
+    setNodes(shiftedNodes)
   }
 
   // Track if we've auto-fitted for current node set
