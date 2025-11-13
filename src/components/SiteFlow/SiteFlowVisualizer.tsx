@@ -129,6 +129,23 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       })
     }
 
+    const COLUMN_BUCKET_SIZE = 220
+    const columnBuckets = new Map<number, string[]>()
+    nodes.forEach(node => {
+      const bucketKey = Math.round(node.x / COLUMN_BUCKET_SIZE)
+      if (!columnBuckets.has(bucketKey)) {
+        columnBuckets.set(bucketKey, [])
+      }
+      columnBuckets.get(bucketKey)!.push(node.id)
+    })
+    const sortedBucketKeys = Array.from(columnBuckets.keys()).sort((a, b) => a - b)
+    const bucketIndexByNode = new Map<string, number>()
+    sortedBucketKeys.forEach((bucketKey, index) => {
+      columnBuckets.get(bucketKey)!.forEach(nodeId => {
+        bucketIndexByNode.set(nodeId, index)
+      })
+    })
+
     const effectiveLevels = new Map<string, number>()
     nodes.forEach(node => {
       if (typeof node.level === 'number') {
@@ -138,7 +155,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       } else if (rootCandidates.has(node.id)) {
         effectiveLevels.set(node.id, 0)
       } else {
-        effectiveLevels.set(node.id, 1)
+        effectiveLevels.set(node.id, bucketIndexByNode.get(node.id) ?? 1)
       }
     })
 
