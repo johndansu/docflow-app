@@ -92,14 +92,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       const nodeLevel = node.level ?? 0
       if (nodeLevel <= 0) return
 
-      const hasParentAtPrevLevel = result.some(conn => {
+      const existingParentAtLevel = result.find(conn => {
         if (conn.to !== node.id) return false
         const parentNode = nodesById.get(conn.from)
-        if (!parentNode) return false
-        const parentLevel = parentNode.level ?? 0
-        return parentLevel === nodeLevel - 1
+        return parentNode ? (parentNode.level ?? 0) === nodeLevel - 1 : false
       })
-      if (hasParentAtPrevLevel) return
+      if (existingParentAtLevel) return
 
       const desiredParentLevel = nodeLevel - 1
       const potentialParents = nodesByLevel.get(desiredParentLevel) ?? []
@@ -125,7 +123,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         if (!existing.has(key)) {
           result.push({ from: parent.id, to: node.id, generated: true })
           existing.add(key)
-          incomingCounts.set(node.id, (incomingCounts.get(node.id) ?? 0) + 1)
         }
       }
     })
