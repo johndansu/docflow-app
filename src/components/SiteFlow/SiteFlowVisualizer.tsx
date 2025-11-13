@@ -207,6 +207,57 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
     })
 
+    const sortedByX = [...nodes].sort((a, b) => a.x - b.x)
+    const COLUMN_THRESHOLD = NODE_WIDTH * 0.6
+    const columnIndex = new Map<string, number>()
+    let currentColumn = -1
+    let lastX = -Infinity
+    sortedByX.forEach(node => {
+      if (currentColumn === -1 || node.x - lastX > COLUMN_THRESHOLD) {
+        currentColumn += 1
+      }
+      columnIndex.set(node.id, currentColumn)
+      lastX = node.x
+    })
+
+    const nodesByColumn = new Map<number, Node[]>()
+    nodes.forEach(node => {
+      const col = columnIndex.get(node.id) ?? 0
+      if (!nodesByColumn.has(col)) {
+        nodesByColumn.set(col, [])
+      }
+      nodesByColumn.get(col)!.push(node)
+    })
+
+    nodes.forEach(node => {
+      const col = columnIndex.get(node.id) ?? 0
+      if (col <= 0) return
+      const prevColumnNodes = nodesByColumn.get(col - 1) ?? []
+      if (prevColumnNodes.length === 0) return
+
+      const hasPrevColumnParent = result.some(conn => {
+        if (conn.to !== node.id) return false
+        const parentCol = columnIndex.get(conn.from) ?? 0
+        return parentCol === col - 1
+      })
+      if (hasPrevColumnParent) return
+
+      const parent = prevColumnNodes.reduce((closest, candidate) => {
+        if (!closest) return candidate
+        const candidateDistance = Math.abs(candidate.y - node.y)
+        const closestDistance = Math.abs(closest.y - node.y)
+        return candidateDistance < closestDistance ? candidate : closest
+      }, undefined as Node | undefined)
+
+      if (parent) {
+        const key = `${parent.id}->${node.id}`
+        if (!existing.has(key)) {
+          result.push({ from: parent.id, to: node.id, generated: true })
+          existing.add(key)
+        }
+      }
+    })
+
     return result
   }, [connections, nodes])
 
