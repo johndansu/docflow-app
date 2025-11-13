@@ -30,11 +30,8 @@ export interface SiteFlowHandle {
 
 const NODE_WIDTH = 260
 const NODE_HEIGHT = 110
-const ARROW_OFFSET = 18
 const VERTICAL_GAP = 260
 const MIN_COLUMN_GAP = 320
-const WORKSPACE_WIDTH = 2800
-const WORKSPACE_HEIGHT = 1800
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -47,7 +44,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
   const [zoom, setZoom] = useState(0.3) // Default to 30% zoom
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
-  const [workspaceSize, setWorkspaceSize] = useState({ width: WORKSPACE_WIDTH, height: WORKSPACE_HEIGHT })
+  const [workspaceSize, setWorkspaceSize] = useState({ width: 2800, height: 1800 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
@@ -728,11 +725,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     saveToHistory()
   }
 
-  const deleteConnection = (from: string, to: string) => {
-    setConnections(prev => prev.filter(c => !(c.from === from && c.to === to)))
-    saveToHistory()
-  }
-
   const handleZoom = (delta: number) => {
     setZoom(prev => {
       const next = Math.max(0.3, Math.min(1.5, prev + delta))
@@ -764,7 +756,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
-    const horizontalGap = Math.max((WORKSPACE_WIDTH - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
+    const horizontalGap = Math.max((2800 - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
 
     const positions = new Map<string, { x: number; y: number }>()
     const visited = new Set<string>()
@@ -833,8 +825,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const maxY = Math.max(...allY, 0)
     const widthNeeded = maxX + NODE_WIDTH + padding
     const heightNeeded = maxY + NODE_HEIGHT + padding
-    const newWidth = Math.max(WORKSPACE_WIDTH, widthNeeded)
-    const newHeight = Math.max(WORKSPACE_HEIGHT, heightNeeded)
+    const newWidth = Math.max(2800, widthNeeded)
+    const newHeight = Math.max(1800, heightNeeded)
     setWorkspaceSize({ width: newWidth, height: newHeight })
 
     setNodes(laidOut)
