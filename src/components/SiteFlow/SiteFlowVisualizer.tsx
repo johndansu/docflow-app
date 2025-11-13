@@ -208,41 +208,37 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const sortedByX = [...nodes].sort((a, b) => a.x - b.x)
-    const COLUMN_THRESHOLD = NODE_WIDTH * 0.6
-    const columnIndex = new Map<string, number>()
-    let currentColumn = -1
-    let lastX = -Infinity
-    sortedByX.forEach(node => {
-      if (currentColumn === -1 || node.x - lastX > COLUMN_THRESHOLD) {
-        currentColumn += 1
-      }
-      columnIndex.set(node.id, currentColumn)
-      lastX = node.x
-    })
-
-    const nodesByColumn = new Map<number, Node[]>()
-    nodes.forEach(node => {
-      const col = columnIndex.get(node.id) ?? 0
-      if (!nodesByColumn.has(col)) {
-        nodesByColumn.set(col, [])
-      }
-      nodesByColumn.get(col)!.push(node)
-    })
+    const HORIZONTAL_MIN_GAP = 24
+    const COLUMN_EPS = NODE_WIDTH * 0.4
 
     nodes.forEach(node => {
-      const col = columnIndex.get(node.id) ?? 0
-      if (col <= 0) return
-      const prevColumnNodes = nodesByColumn.get(col - 1) ?? []
-      if (prevColumnNodes.length === 0) return
+      let maxLeftX = -Infinity
+      const parentCandidates: Node[] = []
+      for (let i = 0; i < sortedByX.length; i++) {
+        const candidate = sortedByX[i]
+        if (candidate.id === node.id) continue
+        if (candidate.x <= node.x - HORIZONTAL_MIN_GAP) {
+          if (candidate.x > maxLeftX + COLUMN_EPS) {
+            maxLeftX = candidate.x
+            parentCandidates.length = 0
+            parentCandidates.push(candidate)
+          } else if (Math.abs(candidate.x - maxLeftX) <= COLUMN_EPS) {
+            parentCandidates.push(candidate)
+          }
+        }
+      }
 
-      const hasPrevColumnParent = result.some(conn => {
+      if (parentCandidates.length === 0) return
+
+      const hasLeftParent = result.some(conn => {
         if (conn.to !== node.id) return false
-        const parentCol = columnIndex.get(conn.from) ?? 0
-        return parentCol === col - 1
+        const parent = nodesById.get(conn.from)
+        if (!parent) return false
+        return Math.abs(parent.x - maxLeftX) <= COLUMN_EPS
       })
-      if (hasPrevColumnParent) return
+      if (hasLeftParent) return
 
-      const parent = prevColumnNodes.reduce((closest, candidate) => {
+      const parent = parentCandidates.reduce((closest, candidate) => {
         if (!closest) return candidate
         const candidateDistance = Math.abs(candidate.y - node.y)
         const closestDistance = Math.abs(closest.y - node.y)
