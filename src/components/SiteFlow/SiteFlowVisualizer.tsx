@@ -72,16 +72,79 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const renderedConnections: RenderedConnection[] = useMemo(() => {
     const result: RenderedConnection[] = [...connections]
     const existing = new Set(result.map(conn => `${conn.from}->${conn.to}`))
-    const incomingCounts = new Map<string, number>()
+
+    const nodesById = new Map<string, Node>()
+    nodes.forEach(node => {
+      nodesById.set(node.id, node)
+    })
+
+    const adjacency = new Map<string, Set<string>>()
+    const incomingSources = new Map<string, Set<string>>()
     result.forEach(conn => {
-      incomingCounts.set(conn.to, (incomingCounts.get(conn.to) ?? 0) + 1)
+      if (!adjacency.has(conn.from)) {
+        adjacency.set(conn.from, new Set())
+      }
+      adjacency.get(conn.from)!.add(conn.to)
+
+      if (!incomingSources.has(conn.to)) {
+        incomingSources.set(conn.to, new Set())
+      }
+      incomingSources.get(conn.to)!.add(conn.from)
+    })
+
+    const rootCandidates = new Set<string>()
+    nodes.forEach(node => {
+      const explicitLevel = node.level
+      if (explicitLevel === 0) {
+        rootCandidates.add(node.id)
+      }
+    })
+    nodes.forEach(node => {
+      if (!incomingSources.has(node.id)) {
+        rootCandidates.add(node.id)
+      }
+    })
+    if (rootCandidates.size === 0 && nodes.length > 0) {
+      rootCandidates.add(nodes[0].id)
+    }
+
+    const computedLevels = new Map<string, number>()
+    const queue: string[] = []
+    rootCandidates.forEach(id => {
+      computedLevels.set(id, 0)
+      queue.push(id)
+    })
+    while (queue.length > 0) {
+      const currentId = queue.shift() as string
+      const currentLevel = computedLevels.get(currentId) ?? 0
+      const children = adjacency.get(currentId)
+      if (!children) continue
+      children.forEach(childId => {
+        const nextLevel = currentLevel + 1
+        const existingLevel = computedLevels.get(childId)
+        if (existingLevel === undefined || nextLevel < existingLevel) {
+          computedLevels.set(childId, nextLevel)
+          queue.push(childId)
+        }
+      })
+    }
+
+    const effectiveLevels = new Map<string, number>()
+    nodes.forEach(node => {
+      if (typeof node.level === 'number') {
+        effectiveLevels.set(node.id, node.level)
+      } else if (computedLevels.has(node.id)) {
+        effectiveLevels.set(node.id, computedLevels.get(node.id)!)
+      } else if (rootCandidates.has(node.id)) {
+        effectiveLevels.set(node.id, 0)
+      } else {
+        effectiveLevels.set(node.id, 1)
+      }
     })
 
     const nodesByLevel = new Map<number, Node[]>()
-    const nodesById = new Map<string, Node>()
     nodes.forEach(node => {
-      const level = node.level ?? 0
-      nodesById.set(node.id, node)
+      const level = effectiveLevels.get(node.id) ?? 0
       if (!nodesByLevel.has(level)) {
         nodesByLevel.set(level, [])
       }
@@ -89,15 +152,15 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     nodes.forEach(node => {
-      const nodeLevel = node.level ?? 0
+      const nodeLevel = effectiveLevels.get(node.id) ?? 0
       if (nodeLevel <= 0) return
 
-      const existingParentAtLevel = result.find(conn => {
+      const hasParentAtPrevLevel = result.some(conn => {
         if (conn.to !== node.id) return false
-        const parentNode = nodesById.get(conn.from)
-        return parentNode ? (parentNode.level ?? 0) === nodeLevel - 1 : false
+        const parentLevel = effectiveLevels.get(conn.from) ?? 0
+        return parentLevel === nodeLevel - 1
       })
-      if (existingParentAtLevel) return
+      if (hasParentAtPrevLevel) return
 
       const desiredParentLevel = nodeLevel - 1
       const potentialParents = nodesByLevel.get(desiredParentLevel) ?? []
@@ -114,8 +177,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
 
       if (!parent) {
-        const rootCandidates = nodesByLevel.get(0) ?? []
-        parent = rootCandidates[0]
+        const rootList = nodesByLevel.get(0) ?? []
+        parent = rootList[0]
       }
 
       if (parent && parent.id !== node.id) {
