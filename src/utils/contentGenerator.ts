@@ -14,9 +14,74 @@ export interface ExtractedInfo {
   techStack: string[]
 }
 
+const COMMAND_PREFIXES = [
+  /^(please\s+)?(help\s+)?(me\s+)?(to\s+)?(build|create|make|develop|design|plan|craft|write|generate)\s+/i,
+  /^(i\s+)?(want|would like|need|am building|am creating)\s+(to\s+)?/i,
+  /^let'?s\s+(build|create|make|design)\s+/i,
+  /^looking\s+to\s+(build|create|make|design)\s+/i
+]
+
+const STOP_WORDS = new Set([
+  'app','application','platform','tool','tools','solution','project','product','service','software','system','build','create','make','develop','design','for','with','that','this','from','into','and','the','a','an','to','of','in','on','my','our','their','users','user','people','team','teams','help','need','like'
+])
+
+const SUFFIXES = ['Hub', 'Flow', 'Deck', 'Nest', 'Suite', 'Portal', 'Loop', 'Forge', 'Atlas', 'Pulse', 'Space', 'Wave', 'Pilot', 'Core', 'Studio', 'Works']
+
+const toTitleCase = (word: string) =>
+  word.replace(/^[a-z]/, c => c.toUpperCase()).replace(/-(\w)/g, (_, chr) => `-${chr.toUpperCase()}`)
+
+const suggestProjectName = (description: string): string => {
+  if (!description || !description.trim()) {
+    return 'Untitled Project'
+  }
+
+  let firstSentence = description.split(/[.!?\n]/)[0]?.trim() || description.trim()
+  COMMAND_PREFIXES.forEach(regex => {
+    firstSentence = firstSentence.replace(regex, '').trim()
+  })
+  firstSentence = firstSentence.replace(/^(an?|the)\s+/i, '').trim()
+
+  const cleanedWords = description
+    .replace(/[^a-z0-9\s-]/gi, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  const keywords: string[] = []
+  cleanedWords.forEach(word => {
+    if (!STOP_WORDS.has(word) && !keywords.includes(word)) {
+      keywords.push(word)
+    }
+  })
+
+  if (keywords.length === 0) {
+    const fallback = firstSentence
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(toTitleCase)
+      .join(' ')
+    return fallback || 'Untitled Project'
+  }
+
+  const base = toTitleCase(keywords[0])
+  const secondary = keywords[1] ? toTitleCase(keywords[1]) : ''
+  const charSum = base.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const suffix = SUFFIXES[charSum % SUFFIXES.length]
+
+  const proposed = [base]
+  if (secondary) {
+    proposed.push(secondary)
+  } else {
+    proposed.push(suffix)
+  }
+
+  const projectName = proposed.join(' ').replace(/\b(App|Application)\b/gi, '').replace(/\s+/g, ' ').trim()
+  return projectName || 'Untitled Project'
+}
+
 export const extractInfo = (description: string): ExtractedInfo => {
   const lines = description.split('\n').filter(l => l.trim())
-  const projectName = lines[0]?.substring(0, 50) || 'Untitled Project'
+  const projectName = suggestProjectName(description).substring(0, 60)
   
   const descriptionLower = description.toLowerCase()
   
