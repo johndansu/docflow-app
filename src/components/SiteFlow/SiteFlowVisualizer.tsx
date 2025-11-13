@@ -735,7 +735,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const centerView = () => {
     if (nodes.length === 0 || !canvasRef.current) return
 
-    const rect = canvasRef.current.getBoundingClientRect()
+      const rect = canvasRef.current.getBoundingClientRect()
     const canvasWidth = rect.width
     const canvasHeight = rect.height
     const targetZoom = 0.3
@@ -948,7 +948,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           ref={canvasContainerRef}
           className="relative"
           style={{ width: workspaceSize.width, height: workspaceSize.height }}
-        >
+            >
           <div
             style={{
               transform: `scale(${zoom})`,
@@ -958,6 +958,59 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
               height: workspaceSize.height,
             }}
           >
+            <svg
+              className="absolute inset-0 pointer-events-none"
+              width={workspaceSize.width}
+              height={workspaceSize.height}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: workspaceSize.width,
+                height: workspaceSize.height,
+                zIndex: 0,
+              }}
+            >
+              <defs>
+                <marker
+                  id="siteflow-arrow"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="9"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
+                </marker>
+              </defs>
+              {connections.map((connection, index) => {
+                const fromNode = nodes.find(node => node.id === connection.from)
+                const toNode = nodes.find(node => node.id === connection.to)
+
+                if (!fromNode || !toNode) return null
+
+                const startX = fromNode.x + NODE_WIDTH
+                const startY = fromNode.y + NODE_HEIGHT / 2
+                const endX = toNode.x - 12
+                const endY = toNode.y + NODE_HEIGHT / 2
+                const controlX = (startX + endX) / 2
+
+                const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
+
+                return (
+                  <path
+                    key={`${connection.from}-${connection.to}-${index}`}
+                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
+                    stroke={isActive ? '#fbbf24' : '#4b5563'}
+                    strokeWidth={isActive ? 2.5 : 1.6}
+                    fill="none"
+                    markerEnd="url(#siteflow-arrow)"
+                    opacity={0.75}
+                  />
+                )
+              })}
+            </svg>
             {filteredNodes.length === 0 && searchQuery ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <p className="text-sm text-mid-grey">No nodes match "{searchQuery}"</p>
@@ -979,6 +1032,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     style={{
                       left: `${node.x}px`,
                       top: `${node.y}px`,
+                      zIndex: 1,
                     }}
                     onMouseDown={(e) => {
                       if (connectingFrom && connectingFrom !== node.id && connectingFrom !== 'connecting') {
@@ -1080,53 +1134,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     </div>
                   </div>
                 )
-              }))}
-            </div>
-            <svg
-              className="absolute inset-0 pointer-events-none"
-              width={workspaceSize.width}
-              height={workspaceSize.height}
-            >
-              <defs>
-                <marker
-                  id="siteflow-arrow"
-                  markerWidth="12"
-                  markerHeight="12"
-                  refX="9"
-                  refY="6"
-                  orient="auto"
-                  markerUnits="strokeWidth"
-                >
-                  <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
-                </marker>
-              </defs>
-              {connections.map((connection, index) => {
-                const fromNode = nodes.find(node => node.id === connection.from)
-                const toNode = nodes.find(node => node.id === connection.to)
-
-                if (!fromNode || !toNode) return null
-
-                const startX = fromNode.x + NODE_WIDTH
-                const startY = fromNode.y + NODE_HEIGHT / 2
-                const endX = toNode.x - 12
-                const endY = toNode.y + NODE_HEIGHT / 2
-                const controlX = (startX + endX) / 2
-
-                const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
-
-                return (
-                  <path
-                    key={`${connection.from}-${connection.to}-${index}`}
-                    d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
-                    stroke={isActive ? '#fbbf24' : '#4b5563'}
-                    strokeWidth={isActive ? 2.5 : 1.6}
-                    fill="none"
-                    markerEnd="url(#siteflow-arrow)"
-                    opacity={0.75}
-                  />
-                )
-              })}
-            </svg>
+              })
+            )}
           </div>
         </div>
 
