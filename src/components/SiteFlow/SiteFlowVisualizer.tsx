@@ -1032,6 +1032,13 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 >
                   <path d="M12,0 L0,6 L12,12 z" fill="url(#siteflow-gradient)" />
                 </marker>
+                <filter id="siteflow-glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
               </defs>
               {connections.map((connection, index) => {
                 const fromNode = nodes.find(node => node.id === connection.from)
@@ -1046,21 +1053,22 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 const controlX = (startX + endX) / 2
 
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
+                const animationDuration = isActive ? '4s' : '8s'
 
                 return (
                   <path
                     key={`${connection.from}-${connection.to}-${index}`}
                     d={`M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`}
-                    stroke={isActive ? '#fbbf24' : 'url(#siteflow-gradient)'}
-                    strokeWidth={isActive ? 2.5 : 1.8}
+                    stroke="url(#siteflow-gradient)"
+                    strokeWidth={isActive ? 3 : 1.8}
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeDasharray={isActive ? undefined : '20 16'}
-                    style={isActive ? undefined : { animation: 'siteflowSupabaseDash 8s linear infinite' }}
+                    strokeDasharray={isActive ? '14 10' : '20 16'}
+                    style={{ animation: `siteflowSupabaseDash ${animationDuration} linear infinite`, filter: isActive ? 'url(#siteflow-glow)' : 'none' }}
                     markerStart={isActive ? 'url(#siteflow-arrow-start)' : 'url(#siteflow-arrow-start-gradient)'}
                     markerEnd={isActive ? 'url(#siteflow-arrow)' : 'url(#siteflow-arrow-gradient)'}
-                    opacity={isActive ? 0.9 : 0.85}
+                    opacity={isActive ? 1 : 0.85}
                   />
                 )
               })}
