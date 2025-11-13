@@ -166,10 +166,14 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
   
   // Group pages by level
   const pagesByLevel = new Map<number, any[]>()
+  const pageMetaByName = new Map<string, any>()
   
   if (data.pages && Array.isArray(data.pages)) {
     data.pages.forEach((page: any) => {
       const level = page.level || 0
+      if (typeof page.name === 'string' && !pageMetaByName.has(page.name)) {
+        pageMetaByName.set(page.name, page)
+      }
       if (!pagesByLevel.has(level)) {
         pagesByLevel.set(level, [])
       }
@@ -177,13 +181,14 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
     })
   }
 
-  const parentNameByChild = new Map<string, string>()
+  const parentCandidatesByChild = new Map<string, string[]>()
   if (data.connections && Array.isArray(data.connections)) {
     data.connections.forEach((conn: any) => {
       if (conn?.from && conn?.to && typeof conn.to === 'string' && typeof conn.from === 'string') {
-        if (!parentNameByChild.has(conn.to)) {
-          parentNameByChild.set(conn.to, conn.from)
+        if (!parentCandidatesByChild.has(conn.to)) {
+          parentCandidatesByChild.set(conn.to, [])
         }
+        parentCandidatesByChild.get(conn.to)!.push(conn.from)
       }
     })
   }
@@ -210,21 +215,45 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
         y = centerY + Math.sin(angle) * levelSpacing
       } else {
         // Level 2+ - find parent and position relative to it
-        const parentName = typeof page.parentId === 'string' && page.parentId.trim().length > 0
-          ? page.parentId
-          : parentNameByChild.get(page.name)
-        if (parentName) {
-          const parentId = pageNameToId.get(parentName)
-          const parentNode = nodes.find(n => n.id === parentId)
+        const declaredParentName = typeof page.parentId === 'string' && page.parentId.trim().length > 0
+          ? page.parentId.trim()
+          : undefined
+        const connectionParents = parentCandidatesByChild.get(page.name) ?? []
+
+        const levelValue = typeof page.level === 'number' ? page.level : level
+        const preferredParentName =
+          declaredParentName ??
+          connectionParents.find(parent => {
+            const parentMeta = pageMetaByName.get(parent)
+            if (!parentMeta) return false
+            const parentLevel = typeof parentMeta.level === 'number' ? parentMeta.level : (parentMeta.level === 0 ? 0 : undefined)
+            if (parentLevel === undefined) return false
+            return parentLevel === levelValue - 1
+          }) ??
+          (connectionParents.length > 0 ? connectionParents[0] : undefined)
+
+        if (preferredParentName) {
+          const parentId = pageNameToId.get(preferredParentName)
+          const parentNode = parentId ? nodes.find(n => n.id === parentId) : undefined
           if (parentNode) {
-            const siblings = pages.filter((p: any) => {
-              const siblingParent = typeof p.parentId === 'string' && p.parentId.trim().length > 0
-                ? p.parentId
-                : parentNameByChild.get(p.name)
-              return siblingParent === parentName
+            const siblingPool = pages.filter((p: any) => {
+              const pDeclaredParent = typeof p.parentId === 'string' && p.parentId.trim().length > 0
+                ? p.parentId.trim()
+                : undefined
+              if (pDeclaredParent === preferredParentName) return true
+              const pConnectionParents = parentCandidatesByChild.get(p.name) ?? []
+              if (pConnectionParents.includes(preferredParentName)) {
+                const pLevel = typeof p.level === 'number' ? p.level : level
+                if (typeof levelValue === 'number' && typeof pLevel === 'number' && Math.abs(pLevel - levelValue) <= 1) {
+                  return true
+                }
+              }
+              return false
             })
-            const siblingIndex = siblings.indexOf(page)
-            const offset = (siblingIndex - siblings.length / 2 + 0.5) * nodeSpacing
+            const sameParentSiblings = siblingPool.length > 0 ? siblingPool : [page]
+            const siblingIndex = sameParentSiblings.indexOf(page)
+            const normalizedIndex = siblingIndex >= 0 ? siblingIndex : sameParentSiblings.length / 2
+            const offset = (normalizedIndex - sameParentSiblings.length / 2 + 0.5) * nodeSpacing
             x = parentNode.x + offset
             y = parentNode.y + levelSpacing
           }
