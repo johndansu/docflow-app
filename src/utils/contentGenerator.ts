@@ -74,10 +74,26 @@ const KEYWORD_REPLACEMENTS: Record<string, string> = {
   kid: 'Kiddo',
   child: 'Playful',
   children: 'Playful',
+  boy: 'Junior',
+  boys: 'Junior',
+  girl: 'Bloom',
+  girls: 'Bloom',
+  male: 'Gentlemen',
+  males: 'Gentlemen',
+  men: 'Gentlemen',
+  man: 'Gentleman',
+  masculine: 'Gentleman',
+  female: 'Queens',
+  women: 'Queens',
+  woman: 'Queen',
   shopping: 'Shopper',
   shop: 'Shopper',
+  store: 'Market',
+  marketplace: 'Market',
+  commerce: 'Commerce',
   notebook: 'Notion',
   notes: 'Notion',
+  journal: 'Journal',
   task: 'Tasker',
   tasks: 'Tasker',
   project: 'Project',
@@ -91,11 +107,20 @@ const KEYWORD_REPLACEMENTS: Record<string, string> = {
   social: 'Circle',
   education: 'Edu',
   ecommerce: 'Commerce',
-  shopify: 'Shopify'
+  shopify: 'Shopify',
+  community: 'Collective',
+  club: 'Club',
+  site: 'Sphere'
 }
 
 const toTitleCase = (word: string) =>
   word.replace(/^[a-z]/, c => c.toUpperCase()).replace(/-(\w)/g, (_, chr) => `-${chr.toUpperCase()}`)
+
+const sanitizeName = (name: string) =>
+  name
+    .replace(/["'`]/g, '')
+    .replace(/[.,;:!?]+$/, '')
+    .trim()
 
 const transformKeyword = (word: string): string => {
   const lower = word.toLowerCase()
@@ -118,6 +143,42 @@ const transformKeyword = (word: string): string => {
 }
 
 const pickFromList = (list: string[], seed: number) => list[Math.abs(seed) % list.length]
+
+const extractExplicitName = (description: string): string | null => {
+  const candidates: string[] = []
+
+  const patterns = [
+    /(?:^|\b)(?:project\s+name|name|titled|called|named)\s*(?:is|=|:)?\s*["'`]([^"'`\n]+)["'`]/i,
+    /(?:^|\b)(?:project\s+name|name|titled|called|named)\s*(?:is|=|:)?\s*([^\n.,]+)/i,
+    /(?:call\s+it|name\s+it|let'?s\s+call\s+it|we\s+call\s+it)\s+["'`]([^"'`\n]+)["'`]?/i
+  ]
+
+  for (const pattern of patterns) {
+    const match = description.match(pattern)
+    if (match && match[1]) {
+      const cleaned = sanitizeName(match[1])
+      if (cleaned.length >= 2) {
+        candidates.push(cleaned)
+      }
+    }
+  }
+
+  const linePattern = /^(?:project\s+name|name)\s*(?:is|=|:)?\s*(.+)$/gim
+  let lineMatch: RegExpExecArray | null
+  while ((lineMatch = linePattern.exec(description)) !== null) {
+    const cleaned = sanitizeName(lineMatch[1])
+    if (cleaned.length >= 2) {
+      candidates.push(cleaned)
+    }
+  }
+
+  if (candidates.length === 0) {
+    return null
+  }
+
+  const selected = candidates[0].split(/\s+/).map(toTitleCase).join(' ')
+  return selected.substring(0, 60)
+}
 
 const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): string => {
   if (keywords.length === 0) {
@@ -145,7 +206,7 @@ const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): strin
     const secondaryTheme = matchedThemes[1]
     const secondaryName = secondaryTheme ? pickFromList(secondaryTheme.names, seed + themedName.length) : null
 
-    const anchorPrimary = anchors[0] || pickFromList(GLOBAL_PREFIXES, seed + themedName.length)
+    const anchorPrimary = anchors[0] || transformKeyword(primaryTheme.keywords[0])
     const anchorSecondary = anchors[1] || (secondaryName ? secondaryName.split(/\s+/)[0] : pickFromList(GLOBAL_SUFFIXES, seed + anchorPrimary.length))
 
     const pieces = [anchorPrimary, themedName]
@@ -168,12 +229,11 @@ const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): strin
     return finalName.length > 0 ? finalName : `${themedName} ${pickFromList(GLOBAL_SUFFIXES, seed)}`.trim()
   }
 
-  const prefix = pickFromList(GLOBAL_PREFIXES, seed)
-  const suffix = pickFromList(GLOBAL_SUFFIXES, seed + (anchors[0]?.length ?? 0))
   const base = anchors[0] || pickFromList(SUFFIXES, seed + 3)
   const bonus = anchors[1]
+  const suffix = pickFromList(GLOBAL_SUFFIXES, seed + (anchors[0]?.length ?? 0))
 
-  const pieces = [prefix, base]
+  const pieces = [base]
   if (bonus && bonus !== base) {
     pieces.push(bonus)
   }
@@ -194,13 +254,18 @@ const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): strin
     return finalName
   }
 
-  const fallback = `${prefix} ${pickFromList(SUFFIXES, seed + 7)}`.trim()
+  const fallback = `${transformKeyword(base)} ${pickFromList(GLOBAL_SUFFIXES, seed + 7)}`.trim()
   return fallback || 'Untitled Project'
 }
 
 const suggestProjectName = (description: string): string => {
   if (!description || !description.trim()) {
     return 'Untitled Project'
+  }
+
+  const explicit = extractExplicitName(description)
+  if (explicit) {
+    return explicit
   }
 
   let firstSentence = description.split(/[.!?\n]/)[0]?.trim() || description.trim()

@@ -1046,10 +1046,15 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
                 if (!fromNode || !toNode) return null
 
+                const ARROW_OFFSET = 18
                 const isForward = fromNode.x <= toNode.x
-                const startX = fromNode.x + (isForward ? NODE_WIDTH : 0)
+                const startX = isForward
+                  ? fromNode.x + NODE_WIDTH - ARROW_OFFSET
+                  : fromNode.x + ARROW_OFFSET
                 const startY = fromNode.y + NODE_HEIGHT / 2
-                const endX = toNode.x + (isForward ? 0 : NODE_WIDTH)
+                const endX = isForward
+                  ? toNode.x - ARROW_OFFSET
+                  : toNode.x + NODE_WIDTH - ARROW_OFFSET
                 const endY = toNode.y + NODE_HEIGHT / 2
 
                 const horizontalDistance = Math.max(Math.abs(endX - startX), 60)
@@ -1071,10 +1076,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
                 const animationDuration = isActive ? '4s' : '8s'
                 const dashPattern = isActive
-                  ? '14 10'
+                  ? '12 8'
                   : horizontalDistance < 160
-                  ? '12 10'
-                  : '20 16'
+                  ? '10 8'
+                  : '18 14'
 
                 return (
                   <path
@@ -1089,7 +1094,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     style={{ animation: `siteflowSupabaseDash ${animationDuration} linear infinite`, filter: isActive ? 'url(#siteflow-glow)' : 'none' }}
                     markerStart={isActive ? 'url(#siteflow-arrow-start)' : 'url(#siteflow-arrow-start-gradient)'}
                     markerEnd={isActive ? 'url(#siteflow-arrow)' : 'url(#siteflow-arrow-gradient)'}
-                    opacity={isActive ? 1 : 0.88}
+                    opacity={isActive ? 1 : 0.92}
                   />
                 )
               })}
