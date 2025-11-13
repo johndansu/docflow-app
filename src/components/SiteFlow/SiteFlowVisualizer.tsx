@@ -983,6 +983,17 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 >
                   <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
                 </marker>
+                <marker
+                  id="siteflow-arrow-start"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="3"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                >
+                  <path d="M12,0 L0,6 L12,12 z" fill="#fbbf24" />
+                </marker>
               </defs>
               {connections.map((connection, index) => {
                 const fromNode = nodes.find(node => node.id === connection.from)
@@ -1005,6 +1016,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                     stroke={isActive ? '#fbbf24' : '#4b5563'}
                     strokeWidth={isActive ? 2.5 : 1.6}
                     fill="none"
+                    markerStart="url(#siteflow-arrow-start)"
                     markerEnd="url(#siteflow-arrow)"
                     opacity={0.75}
                   />
@@ -1245,7 +1257,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
       {/* Simple Instructions */}
       <div className="mt-2 text-xs text-mid-grey text-center">
-        Double-click nodes to edit • Right-click for menu • Drag canvas to pan • Use the side slider to zoom in/out
+        Double-click nodes to edit • Right-click for menu • Drag canvas to pan • Use the ± buttons to zoom
       </div>
     </div>
   )
