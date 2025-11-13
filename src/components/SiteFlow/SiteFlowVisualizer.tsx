@@ -767,15 +767,20 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
 
     const maxDepth = Math.max(...nodes.map(node => node.level ?? 0), 0)
-    const horizontalGap = Math.max((2800 - padding * 2) / Math.max(maxDepth, 1), MIN_COLUMN_GAP)
+    const availableWidth = Math.max(canvasWidth / targetZoom - padding * 2, MIN_COLUMN_GAP * (maxDepth + 1))
+    const availableHeight = Math.max(canvasHeight / targetZoom - padding * 2, VERTICAL_GAP * Math.max(nodes.length, 1))
+    const columnWidth = Math.max(availableWidth / Math.max(maxDepth + 1, 1), MIN_COLUMN_GAP)
 
     const positions = new Map<string, { x: number; y: number }>()
+    const columnOffsets = new Map<number, number>()
+    const columnCounts = new Map<number, number>()
     const visited = new Set<string>()
     let nextY = padding
 
     const assign = (id: string, depth: number): number => {
       if (visited.has(id)) {
-        return positions.get(id)?.y ?? nextY
+        const existing = positions.get(id)
+        return existing ? existing.y : nextY
       }
       visited.add(id)
 
@@ -787,12 +792,18 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
 
       const level = node.level ?? depth
-      const x = padding + level * horizontalGap
+      const columnIndex = Math.min(level, maxDepth)
+      const baseX = padding + columnIndex * columnWidth
+      const offset = columnOffsets.get(columnIndex) ?? 0
+      const x = baseX + offset
+
       const children = (childMap.get(id) ?? []).filter(childId => nodesById.has(childId))
 
       if (children.length === 0) {
         const y = nextY
         positions.set(id, { x, y })
+        columnOffsets.set(columnIndex, offset + NODE_WIDTH * 1.05)
+        columnCounts.set(columnIndex, (columnCounts.get(columnIndex) ?? 0) + 1)
         nextY += VERTICAL_GAP
         return y
       }
@@ -802,6 +813,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       const maxY = Math.max(...childYs)
       const y = (minY + maxY) / 2
       positions.set(id, { x, y })
+      columnOffsets.set(columnIndex, offset + NODE_WIDTH * 1.1)
+      columnCounts.set(columnIndex, (columnCounts.get(columnIndex) ?? 0) + 1)
       return y
     }
 
