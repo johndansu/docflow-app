@@ -30,8 +30,10 @@ export interface SiteFlowHandle {
 
 const NODE_WIDTH = 260
 const NODE_HEIGHT = 110
-const VERTICAL_GAP = 260
-const MIN_COLUMN_GAP = 320
+const TARGET_ZOOM = 0.5
+const CANVAS_PADDING = 300
+const HORIZONTAL_SPACING = NODE_WIDTH + 280
+const LEVEL_VERTICAL_SPACING = NODE_HEIGHT + 190
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -749,15 +751,15 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const rect = canvasRef.current.getBoundingClientRect()
     const canvasWidth = rect.width
     const canvasHeight = rect.height
-    const targetZoom = 0.3
-    const padding = 200
+
+    const availableWidth = Math.max(canvasWidth / TARGET_ZOOM - CANVAS_PADDING * 2, HORIZONTAL_SPACING)
+    const availableHeight = Math.max(canvasHeight / TARGET_ZOOM - CANVAS_PADDING * 2, LEVEL_VERTICAL_SPACING)
 
     setNodes(prevNodes => {
       if (prevNodes.length === 0) {
         return prevNodes
       }
 
-      const nodesById = new Map<string, Node>(prevNodes.map(node => [String(node.id), node]))
       const childMap = new Map<string, string[]>()
       const incomingCount = new Map<string, number>()
 
@@ -771,127 +773,118 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         incomingCount.set(toId, (incomingCount.get(toId) ?? 0) + 1)
       })
 
-      const computedDepths = new Map<string, number>()
-      const traverseDepth = (id: string, depth: number) => {
-        const currentDepth = computedDepths.get(id)
-        if (currentDepth === undefined || depth > currentDepth) {
-          computedDepths.set(id, depth)
-          const children = childMap.get(id) ?? []
-          children.forEach(childId => traverseDepth(childId, depth + 1))
-        }
-      }
-
-      const roots = prevNodes.filter(node => {
+      let roots = prevNodes.filter(node => {
         const nodeId = String(node.id)
         return (node.level ?? 0) === 0 || (incomingCount.get(nodeId) ?? 0) === 0
       })
 
-      const orderedRoots = roots.length > 0 ? roots : prevNodes.slice(0, 1)
-      orderedRoots.forEach(root => traverseDepth(String(root.id), root.level ?? 0))
-      prevNodes.forEach(node => {
-        const id = String(node.id)
-        if (!computedDepths.has(id)) {
-          traverseDepth(id, node.level ?? 0)
-        }
-      })
-
-      const maxDepth = Math.max(...Array.from(computedDepths.values()), 0)
-      const availableWidth = Math.max(canvasWidth / targetZoom - padding * 2, MIN_COLUMN_GAP * (maxDepth + 1))
-      const availableHeight = Math.max(canvasHeight / targetZoom - padding * 2, VERTICAL_GAP * Math.max(prevNodes.length, 1))
-      const columnWidth = Math.max(availableWidth / Math.max(maxDepth + 1, 1), MIN_COLUMN_GAP)
-
-      const positions = new Map<string, { x: number; y: number }>()
-      const columnOffsets = new Map<number, number>()
-      const visited = new Set<string>()
-      let nextY = padding
-
-      const assign = (id: string, depth: number): number => {
-        if (visited.has(id)) {
-          const existing = positions.get(id)
-          return existing ? existing.y : nextY
-        }
-        visited.add(id)
-
-        const node = nodesById.get(id)
-        if (!node) {
-          const fallback = nextY
-          nextY += VERTICAL_GAP
-          return fallback
-        }
-
-        const level = computedDepths.get(id) ?? depth
-        const columnIndex = Math.min(level, maxDepth)
-        const baseX = padding + columnIndex * columnWidth
-        const offset = columnOffsets.get(columnIndex) ?? 0
-        const x = baseX + offset
-
-        const children = (childMap.get(id) ?? []).filter(childId => nodesById.has(childId))
-
-        if (children.length === 0) {
-          const y = nextY
-          positions.set(id, { x, y })
-          columnOffsets.set(columnIndex, offset + NODE_WIDTH * 1.05)
-          nextY += VERTICAL_GAP
-          return y
-        }
-
-        const childYs = children.map(childId => assign(childId, level + 1))
-        const minY = Math.min(...childYs)
-        const maxY = Math.max(...childYs)
-        const y = (minY + maxY) / 2
-        positions.set(id, { x, y })
-        columnOffsets.set(columnIndex, offset + NODE_WIDTH * 1.1)
-        return y
+      if (roots.length === 0) {
+        roots = [prevNodes[0]]
       }
 
-      orderedRoots.forEach(root => {
-        assign(String(root.id), computedDepths.get(String(root.id)) ?? 0)
-        nextY += VERTICAL_GAP
-      })
+      const levelMap = new Map<string, number>()
+      const queue: Array<{ id: string; depth: number }> = roots.map(root => ({
+        id: String(root.id),
+        depth: root.level ?? 0,
+      }))
+
+      queue.forEach(({ id, depth }) => levelMap.set(id, depth))
+
+      while (queue.length > 0) {
+        const { id, depth } = queue.shift()!
+        const children = childMap.get(id) ?? []
+        children.forEach(childId => {
+          const nextDepth = depth + 1
+          const recorded = levelMap.get(childId)
+          if (recorded === undefined || nextDepth > recorded) {
+            levelMap.set(childId, nextDepth)
+            queue.push({ id: childId, depth: nextDepth })
+          }
+        })
+      }
 
       prevNodes.forEach(node => {
         const id = String(node.id)
-        if (!visited.has(id)) {
-          assign(id, computedDepths.get(id) ?? 0)
-          nextY += VERTICAL_GAP
+        if (!levelMap.has(id)) {
+          levelMap.set(id, node.level ?? 0)
         }
       })
 
-      const laidOut = prevNodes.map(node => {
-        const pos = positions.get(String(node.id))
-        if (!pos) return node
-        return { ...node, x: pos.x, y: pos.y }
+      const depthValues = Array.from(levelMap.values())
+      const maxDepth = depthValues.length > 0 ? Math.max(...depthValues) : 0
+      const columnWidth = Math.max(
+        HORIZONTAL_SPACING,
+        maxDepth > 0 ? availableWidth / Math.max(maxDepth, 1) : HORIZONTAL_SPACING
+      )
+
+      const levelNodes = new Map<number, Node[]>()
+      prevNodes.forEach(node => {
+        const depth = levelMap.get(String(node.id)) ?? 0
+        if (!levelNodes.has(depth)) {
+          levelNodes.set(depth, [])
+        }
+        levelNodes.get(depth)!.push(node)
       })
 
-      const minY = Math.min(...laidOut.map(node => node.y))
-      const maxY = Math.max(...laidOut.map(node => node.y + NODE_HEIGHT))
-      const currentHeight = maxY - minY
-      const extraSpace = availableHeight - currentHeight
-      const verticalShift = extraSpace > 0 ? extraSpace / 2 - minY + padding : -minY + padding
+      let maxLevelCount = 0
+      levelNodes.forEach(nodesAtLevel => {
+        nodesAtLevel.sort((a, b) => a.y - b.y)
+        if (nodesAtLevel.length > maxLevelCount) {
+          maxLevelCount = nodesAtLevel.length
+        }
+      })
 
-      const shiftedNodes = laidOut.map(node => ({
-        ...node,
-        y: node.y + verticalShift,
-      }))
+      const verticalSpacing = Math.max(
+        LEVEL_VERTICAL_SPACING,
+        maxLevelCount > 1 ? availableHeight / Math.max(maxLevelCount - 1, 1) : LEVEL_VERTICAL_SPACING
+      )
 
-      const minX = Math.min(...shiftedNodes.map(node => node.x))
-      const maxX = Math.max(...shiftedNodes.map(node => node.x + NODE_WIDTH))
-      const finalMinY = Math.min(...shiftedNodes.map(node => node.y))
-      const finalMaxY = Math.max(...shiftedNodes.map(node => node.y + NODE_HEIGHT))
+      const positions = new Map<string, { x: number; y: number }>()
+      levelNodes.forEach((nodesAtLevel, level) => {
+        nodesAtLevel.forEach((node, index) => {
+          const x = CANVAS_PADDING + level * columnWidth
+          const y = index * verticalSpacing
+          positions.set(String(node.id), { x, y })
+        })
+      })
 
-      const requiredWidth = maxX - minX + padding * 2
-      const requiredHeight = finalMaxY - finalMinY + padding * 2
+      const baseYValues = Array.from(positions.values()).map(pos => pos.y)
+      const minBaseY = baseYValues.length > 0 ? Math.min(...baseYValues) : 0
+      const maxBaseY = baseYValues.length > 0 ? Math.max(...baseYValues) : 0
+      const totalHeight = maxBaseY - minBaseY + NODE_HEIGHT
+      const extraVerticalSpace = availableHeight - totalHeight
+      const verticalShift = extraVerticalSpace > 0
+        ? CANVAS_PADDING + extraVerticalSpace / 2 - minBaseY
+        : CANVAS_PADDING - minBaseY
+
+      const positionedNodes = prevNodes.map(node => {
+        const id = String(node.id)
+        const pos = positions.get(id)
+        if (!pos) return node
+        const depth = levelMap.get(id) ?? (node.level ?? 0)
+        return {
+          ...node,
+          level: depth,
+          x: pos.x,
+          y: pos.y + verticalShift,
+        }
+      })
+
+      const maxX = Math.max(...positionedNodes.map(node => node.x + NODE_WIDTH))
+      const maxY = Math.max(...positionedNodes.map(node => node.y + NODE_HEIGHT))
+      const requiredWidth = maxX + CANVAS_PADDING
+      const requiredHeight = maxY + CANVAS_PADDING
 
       setWorkspaceSize(current => ({
-        width: Math.max(Math.ceil(requiredWidth), current.width),
-        height: Math.max(Math.ceil(requiredHeight), current.height),
+        width: Math.max(current.width, Math.ceil(requiredWidth)),
+        height: Math.max(current.height, Math.ceil(requiredHeight)),
       }))
 
-      setZoom(targetZoom)
-      setPanOffset({ x: 0, y: 0 })
-
-      return shiftedNodes
+      return positionedNodes
     })
+
+    setZoom(TARGET_ZOOM)
+    setPanOffset({ x: 0, y: 0 })
   }, [connections])
 
   // Track if we've auto-fitted for current node set
