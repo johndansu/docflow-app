@@ -66,7 +66,6 @@ const THEME_DICTIONARY: { keywords: string[]; names: string[] }[] = [
   }
 ]
 
-const GLOBAL_PREFIXES = ['Nova', 'Quantum', 'Lumen', 'Echo', 'Vertex', 'Nimbus', 'Atlas', 'Aurora', 'Cosmic', 'Parallel', 'Prism', 'Catalyst', 'Bright', 'Hyper', 'Solar']
 const GLOBAL_SUFFIXES = ['Labs', 'Studio', 'Works', 'Forge', 'Pulse', 'Orbit', 'Realm', 'Collective', 'Verse', 'Matrix', 'Nest', 'Beacon', 'Fabric', 'Harbor', 'Vista']
 
 const KEYWORD_REPLACEMENTS: Record<string, string> = {
