@@ -1168,31 +1168,32 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
                 if (!fromNode || !toNode) return null
 
-                const ARROW_OFFSET = 18
+                const START_GAP = 32
+                const END_GAP = 36
                 const isForward = fromNode.x <= toNode.x
                 const startX = isForward
-                  ? fromNode.x + NODE_WIDTH - ARROW_OFFSET
-                  : fromNode.x + ARROW_OFFSET
+                  ? fromNode.x + NODE_WIDTH + START_GAP
+                  : fromNode.x - START_GAP
                 const startY = fromNode.y + NODE_HEIGHT / 2
                 const endX = isForward
-                  ? toNode.x - ARROW_OFFSET
-                  : toNode.x + NODE_WIDTH - ARROW_OFFSET
+                  ? toNode.x - END_GAP
+                  : toNode.x + NODE_WIDTH + END_GAP
                 const endY = toNode.y + NODE_HEIGHT / 2
 
-                const horizontalDistance = Math.max(Math.abs(endX - startX), 80)
+                const horizontalDistance = Math.max(Math.abs(endX - startX), 140)
                 const verticalDistance = endY - startY
                 const midX = (startX + endX) / 2
                 const midY = (startY + endY) / 2
-                const controlOffset = Math.max(horizontalDistance * 0.45, 90)
+                const controlOffset = Math.max(horizontalDistance * 0.5, 120)
 
                 const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
                 const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
                 const controlY1 = startY + verticalDistance * 0.25
                 const controlY2 = endY - verticalDistance * 0.25
 
-                const isShortLink = horizontalDistance < 160 && Math.abs(verticalDistance) < 120
+                const isShortLink = horizontalDistance < 200 && Math.abs(verticalDistance) < 140
                 const pathD = isShortLink
-                  ? `M ${startX} ${startY} Q ${isForward ? midX + 70 : midX - 70} ${midY} ${endX} ${endY}`
+                  ? `M ${startX} ${startY} Q ${isForward ? midX + 90 : midX - 90} ${midY} ${endX} ${endY}`
                   : `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
 
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
