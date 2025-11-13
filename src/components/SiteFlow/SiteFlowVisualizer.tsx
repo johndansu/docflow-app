@@ -1052,32 +1052,44 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 const endX = toNode.x + (isForward ? 0 : NODE_WIDTH)
                 const endY = toNode.y + NODE_HEIGHT / 2
 
-                const horizontalDistance = Math.max(Math.abs(endX - startX), 80)
+                const horizontalDistance = Math.max(Math.abs(endX - startX), 60)
                 const verticalDistance = endY - startY
-                const controlOffset = horizontalDistance / 2
+                const midX = (startX + endX) / 2
+                const midY = (startY + endY) / 2
+                const controlOffset = Math.max(horizontalDistance / 2, 90)
 
                 const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
                 const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
                 const controlY1 = startY + verticalDistance * 0.25
                 const controlY2 = endY - verticalDistance * 0.25
 
+                const isShortLink = horizontalDistance < 140 && Math.abs(verticalDistance) < 120
+                const pathD = isShortLink
+                  ? `M ${startX} ${startY} Q ${isForward ? midX + 60 : midX - 60} ${midY} ${endX} ${endY}`
+                  : `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
+
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
                 const animationDuration = isActive ? '4s' : '8s'
+                const dashPattern = isActive
+                  ? '14 10'
+                  : horizontalDistance < 160
+                  ? '12 10'
+                  : '20 16'
 
                 return (
                   <path
                     key={`${connection.from}-${connection.to}-${index}`}
-                    d={`M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`}
+                    d={pathD}
                     stroke="url(#siteflow-gradient)"
                     strokeWidth={isActive ? 3 : 1.8}
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeDasharray={isActive ? '14 10' : '20 16'}
+                    strokeDasharray={dashPattern}
                     style={{ animation: `siteflowSupabaseDash ${animationDuration} linear infinite`, filter: isActive ? 'url(#siteflow-glow)' : 'none' }}
                     markerStart={isActive ? 'url(#siteflow-arrow-start)' : 'url(#siteflow-arrow-start-gradient)'}
                     markerEnd={isActive ? 'url(#siteflow-arrow)' : 'url(#siteflow-arrow-gradient)'}
-                    opacity={isActive ? 1 : 0.85}
+                    opacity={isActive ? 1 : 0.88}
                   />
                 )
               })}

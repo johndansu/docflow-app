@@ -27,6 +27,48 @@ const STOP_WORDS = new Set([
 
 const SUFFIXES = ['Hub', 'Flow', 'Deck', 'Nest', 'Suite', 'Portal', 'Loop', 'Forge', 'Atlas', 'Pulse', 'Space', 'Wave', 'Pilot', 'Core', 'Studio', 'Works']
 
+const THEME_DICTIONARY: { keywords: string[]; names: string[] }[] = [
+  {
+    keywords: ['shop', 'shopping', 'store', 'retail', 'commerce', 'cart', 'checkout', 'market', 'boutique'],
+    names: ['Cartova', 'Mercana', 'Shopora', 'Bazilio', 'Checkoutly', 'MarketFlux', 'Trolleyx', 'Retailyn', 'Bazaario', 'Cartstream']
+  },
+  {
+    keywords: ['kid', 'kids', 'child', 'children', 'youth', 'play', 'toy', 'toddler', 'school', 'classroom'],
+    names: ['SproutSpark', 'WonderNest', 'Playloom', 'PebbleJoy', 'MiniOrbit', 'BrightBud', 'Kidora', 'Lilypad Labs', 'JoyMint', 'SprigLane']
+  },
+  {
+    keywords: ['note', 'notes', 'notebook', 'journal', 'doc', 'document', 'writing', 'write', 'scribe', 'memo'],
+    names: ['Quillcraft', 'Draftline', 'Scriptoria', 'Pageforge', 'MemoNest', 'NoteLoom', 'Scribeon', 'Journova', 'Draftsmith', 'Logium']
+  },
+  {
+    keywords: ['ai', 'agent', 'automation', 'assistant', 'bot', 'intelligence', 'machine'],
+    names: ['Aionics', 'Agentix', 'Automata Lab', 'BotLoop', 'SynthMind', 'CogniFlow', 'NeuroNest', 'ThinkBeam', 'LogicPulse', 'Promptify']
+  },
+  {
+    keywords: ['finance', 'budget', 'accounting', 'money', 'bank', 'crypto', 'investment', 'invoice'],
+    names: ['Ledgerly', 'Mintwave', 'Finova', 'Coinspan', 'Valorix', 'Fundron', 'Cashmere Labs', 'Budgetry', 'Paycraft', 'Accrualis']
+  },
+  {
+    keywords: ['health', 'fitness', 'medical', 'wellness', 'clinic', 'care', 'hospital', 'therapy', 'med'],
+    names: ['Vitalon', 'Pulseforge', 'Mediora', 'Wellnest', 'Fitflare', 'Healcraft', 'TheraBeam', 'Clinique Labs', 'Wellspring', 'Carenova']
+  },
+  {
+    keywords: ['education', 'learn', 'learning', 'school', 'student', 'course', 'curriculum', 'teach', 'lesson'],
+    names: ['Learnova', 'Campusly', 'Eduverse', 'ScholarAxis', 'Classloom', 'Tutorium', 'AcademiaX', 'Lessonary', 'Teachlane', 'MentorLab']
+  },
+  {
+    keywords: ['travel', 'trip', 'tour', 'journey', 'flight', 'hotel', 'tourism', 'vacation'],
+    names: ['Voyagr', 'Tripcade', 'Traveline', 'Jetstream', 'Roamara', 'Nomadix', 'Globetrail', 'AtlasLane', 'Itinero', 'Excursion Labs']
+  },
+  {
+    keywords: ['music', 'audio', 'sound', 'song', 'podcast', 'radio'],
+    names: ['Audiary', 'Soundwave', 'TuneForge', 'Melodic', 'Podloom', 'Rhythmo', 'Harmonyx', 'BeatFolio', 'Chordline', 'Resonata']
+  }
+]
+
+const GLOBAL_PREFIXES = ['Nova', 'Quantum', 'Lumen', 'Echo', 'Vertex', 'Nimbus', 'Atlas', 'Aurora', 'Cosmic', 'Parallel', 'Prism', 'Catalyst', 'Bright', 'Hyper', 'Solar']
+const GLOBAL_SUFFIXES = ['Labs', 'Studio', 'Works', 'Forge', 'Pulse', 'Orbit', 'Realm', 'Collective', 'Verse', 'Matrix', 'Nest', 'Beacon', 'Fabric', 'Harbor', 'Vista']
+
 const KEYWORD_REPLACEMENTS: Record<string, string> = {
   kids: 'Kiddo',
   kid: 'Kiddo',
@@ -75,28 +117,85 @@ const transformKeyword = (word: string): string => {
   return toTitleCase(lower)
 }
 
-const buildNameFromKeywords = (keywords: string[]): string => {
+const pickFromList = (list: string[], seed: number) => list[Math.abs(seed) % list.length]
+
+const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): string => {
   if (keywords.length === 0) {
     return 'Untitled Project'
   }
 
+  const seed = keywords.join('').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+
+  const matchedThemes = THEME_DICTIONARY.filter(theme =>
+    theme.keywords.some(key => keywords.includes(key))
+  )
+
   const transformed = keywords.map(transformKeyword)
-  const unique = transformed.filter((value, index, arr) => value && arr.indexOf(value) === index)
+  const uniqueAnchors = transformed
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+    .slice(0, 3)
 
-  if (unique.length === 1) {
-    return `${unique[0]} ${SUFFIXES[(unique[0].charCodeAt(0) + unique[0].length) % SUFFIXES.length]}`
+  const safeAnchors = uniqueAnchors.filter(word => !rawWords.has(word.toLowerCase()))
+  const anchors = safeAnchors.length > 0 ? safeAnchors : uniqueAnchors
+
+  if (matchedThemes.length > 0) {
+    const primaryTheme = matchedThemes[0]
+    const themedName = pickFromList(primaryTheme.names, seed)
+    const secondaryTheme = matchedThemes[1]
+    const secondaryName = secondaryTheme ? pickFromList(secondaryTheme.names, seed + themedName.length) : null
+
+    const anchorPrimary = anchors[0] || pickFromList(GLOBAL_PREFIXES, seed + themedName.length)
+    const anchorSecondary = anchors[1] || (secondaryName ? secondaryName.split(/\s+/)[0] : pickFromList(GLOBAL_SUFFIXES, seed + anchorPrimary.length))
+
+    const pieces = [anchorPrimary, themedName]
+    if (secondaryName && secondaryName !== themedName) {
+      pieces.push(secondaryName)
+    } else if (anchorSecondary && anchorSecondary !== anchorPrimary && anchorSecondary !== themedName) {
+      pieces.push(anchorSecondary)
+    }
+
+    const combined = pieces
+      .map(part => part.replace(/\b(App|Application|Platform|Project)\b/gi, '').trim())
+      .filter(part => part.length > 1)
+
+    const sanitized = combined
+      .filter((value, index, arr) => value && arr.indexOf(value) === index)
+      .filter(part => !rawWords.has(part.toLowerCase()))
+
+    const finalParts = sanitized.length >= 2 ? sanitized : combined
+    const finalName = finalParts.join(' ').replace(/\s+/g, ' ').trim()
+    return finalName.length > 0 ? finalName : `${themedName} ${pickFromList(GLOBAL_SUFFIXES, seed)}`.trim()
   }
 
-  const base = unique[0]
-  const second = unique[1] || SUFFIXES[(base.charCodeAt(0) + base.length) % SUFFIXES.length]
-  const suffixIndex = (base.charCodeAt(0) + (unique[1]?.charCodeAt(0) ?? 0) + unique.length) % SUFFIXES.length
-  const suffix = SUFFIXES[suffixIndex]
+  const prefix = pickFromList(GLOBAL_PREFIXES, seed)
+  const suffix = pickFromList(GLOBAL_SUFFIXES, seed + (anchors[0]?.length ?? 0))
+  const base = anchors[0] || pickFromList(SUFFIXES, seed + 3)
+  const bonus = anchors[1]
 
-  if (second === base) {
-    return `${base} ${suffix}`
+  const pieces = [prefix, base]
+  if (bonus && bonus !== base) {
+    pieces.push(bonus)
+  }
+  pieces.push(suffix)
+
+  const combined = pieces
+    .map(part => part.replace(/\b(App|Application|Platform|Project)\b/gi, '').trim())
+    .filter(part => part.length > 1)
+
+  const finalName = combined
+    .filter((value, index, arr) => value && arr.indexOf(value) === index)
+    .filter(part => !rawWords.has(part.toLowerCase()))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (finalName.length > 0) {
+    return finalName
   }
 
-  return `${base} ${second} ${suffix}`.replace(/\b(App|Application)\b/gi, '').replace(/\s+/g, ' ').trim()
+  const fallback = `${prefix} ${pickFromList(SUFFIXES, seed + 7)}`.trim()
+  return fallback || 'Untitled Project'
 }
 
 const suggestProjectName = (description: string): string => {
@@ -117,7 +216,10 @@ const suggestProjectName = (description: string): string => {
     .filter(Boolean)
 
   const keywords: string[] = []
+  const rawWordSet = new Set<string>()
+
   cleanedWords.forEach(word => {
+    rawWordSet.add(word)
     if (!STOP_WORDS.has(word) && !keywords.includes(word)) {
       keywords.push(word)
     }
@@ -132,7 +234,8 @@ const suggestProjectName = (description: string): string => {
     return fallback || 'Untitled Project'
   }
 
-  return buildNameFromKeywords(keywords.slice(0, 4))
+  const name = buildNameFromKeywords(keywords.slice(0, 6), rawWordSet)
+  return name.substring(0, 60)
 }
 
 export const extractInfo = (description: string): ExtractedInfo => {
