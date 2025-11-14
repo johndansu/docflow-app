@@ -75,6 +75,11 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
 
   const renderedConnections: RenderedConnection[] = useMemo(() => {
+    const shouldAutoConnect = connections.length === 0
+    if (!shouldAutoConnect) {
+      return connections
+    }
+
     const result: RenderedConnection[] = [...connections]
     const existing = new Set(result.map(conn => `${conn.from}->${conn.to}`))
 
