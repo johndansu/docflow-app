@@ -299,6 +299,84 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }, [connections, nodes])
 
   useEffect(() => {
+    if (nodes.length === 0) return
+
+    const nodesById = new Map<string, Node>()
+    nodes.forEach(node => {
+      nodesById.set(node.id, node)
+    })
+
+    let maxNodeExtentX = 0
+    let maxNodeExtentY = 0
+
+    nodes.forEach(node => {
+      maxNodeExtentX = Math.max(maxNodeExtentX, node.x + NODE_WIDTH)
+      maxNodeExtentY = Math.max(maxNodeExtentY, node.y + NODE_HEIGHT)
+    })
+
+    let maxConnectionExtentX = maxNodeExtentX
+    let maxConnectionExtentY = maxNodeExtentY
+
+    const trackPoint = (x: number, y: number) => {
+      if (Number.isFinite(x)) {
+        maxConnectionExtentX = Math.max(maxConnectionExtentX, x)
+      }
+      if (Number.isFinite(y)) {
+        maxConnectionExtentY = Math.max(maxConnectionExtentY, y)
+      }
+    }
+
+    renderedConnections.forEach(connection => {
+      const fromNode = nodesById.get(connection.from)
+      const toNode = nodesById.get(connection.to)
+      if (!fromNode || !toNode) return
+
+      const isForward = fromNode.x <= toNode.x
+      const startX = isForward
+        ? fromNode.x + NODE_WIDTH + CONNECTION_START_GAP
+        : fromNode.x - CONNECTION_START_GAP
+      const startY = fromNode.y + NODE_HEIGHT / 2
+      const endX = isForward
+        ? toNode.x - CONNECTION_END_GAP
+        : toNode.x + NODE_WIDTH + CONNECTION_END_GAP
+      const endY = toNode.y + NODE_HEIGHT / 2
+
+      const horizontalDistance = Math.max(Math.abs(endX - startX), CONNECTION_MIN_HORIZONTAL_DISTANCE)
+      const verticalDistance = endY - startY
+      const controlOffset = Math.max(horizontalDistance * 0.5, CONNECTION_CONTROL_MIN)
+
+      const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
+      const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
+      const controlY1 = startY + verticalDistance * 0.25
+      const controlY2 = endY - verticalDistance * 0.25
+
+      trackPoint(startX, startY)
+      trackPoint(endX, endY)
+      trackPoint(controlX1, controlY1)
+      trackPoint(controlX2, controlY2)
+
+      if (horizontalDistance < 200 && Math.abs(verticalDistance) < 140) {
+        const midX = (startX + endX) / 2
+        const midY = (startY + endY) / 2
+        const shortControlX = isForward ? midX + CONNECTION_SHORT_LINK_OFFSET : midX - CONNECTION_SHORT_LINK_OFFSET
+        trackPoint(shortControlX, midY)
+      }
+    })
+
+    const requiredWidth = maxConnectionExtentX + CANVAS_PADDING
+    const requiredHeight = maxConnectionExtentY + CANVAS_PADDING
+
+    setWorkspaceSize(prev => {
+      const nextWidth = Math.max(prev.width, Math.ceil(requiredWidth))
+      const nextHeight = Math.max(prev.height, Math.ceil(requiredHeight))
+      if (nextWidth === prev.width && nextHeight === prev.height) {
+        return prev
+      }
+      return { width: nextWidth, height: nextHeight }
+    })
+  }, [nodes, renderedConnections])
+
+  useEffect(() => {
     const generatedConnections = renderedConnections.filter(conn => conn.generated)
     if (generatedConnections.length === 0) {
       return
