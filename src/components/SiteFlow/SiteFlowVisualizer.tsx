@@ -298,6 +298,32 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     return result
   }, [connections, nodes])
 
+  useEffect(() => {
+    const generatedConnections = renderedConnections.filter(conn => conn.generated)
+    if (generatedConnections.length === 0) {
+      return
+    }
+
+    setConnections(prev => {
+      const keySet = new Set(prev.map(conn => `${conn.from}->${conn.to}`))
+      const additions: Connection[] = []
+
+      generatedConnections.forEach(conn => {
+        const key = `${conn.from}->${conn.to}`
+        if (!keySet.has(key)) {
+          keySet.add(key)
+          additions.push({ from: conn.from, to: conn.to })
+        }
+      })
+
+      if (additions.length === 0) {
+        return prev
+      }
+
+      return [...prev, ...additions]
+    })
+  }, [renderedConnections])
+
   useImperativeHandle(ref, () => ({
     getCurrentSiteFlow: () => latestSiteFlowRef.current,
   }), [])
