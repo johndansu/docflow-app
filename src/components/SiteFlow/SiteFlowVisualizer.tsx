@@ -75,12 +75,21 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
 
   const renderedConnections: RenderedConnection[] = useMemo(() => {
-    const result: RenderedConnection[] = [...connections]
-    const existing = new Set(result.map(conn => `${conn.from}->${conn.to}`))
-
     const nodesById = new Map<string, Node>()
     nodes.forEach(node => {
       nodesById.set(node.id, node)
+    })
+
+    const result: RenderedConnection[] = []
+    const existing = new Set<string>()
+    connections.forEach(conn => {
+      if (!conn || !conn.from || !conn.to) return
+      if (!nodesById.has(conn.from) || !nodesById.has(conn.to)) return
+      if (conn.from === conn.to) return
+      const key = `${conn.from}->${conn.to}`
+      if (existing.has(key)) return
+      existing.add(key)
+      result.push(conn)
     })
 
     const adjacency = new Map<string, Set<string>>()
