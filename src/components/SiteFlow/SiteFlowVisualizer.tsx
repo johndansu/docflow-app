@@ -75,11 +75,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
 
   const renderedConnections: RenderedConnection[] = useMemo(() => {
-    const shouldAutoConnect = connections.length === 0
-    if (!shouldAutoConnect) {
-      return connections
-    }
-
     const result: RenderedConnection[] = [...connections]
     const existing = new Set(result.map(conn => `${conn.from}->${conn.to}`))
 
@@ -183,9 +178,22 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       nodesByLevel.get(level)!.push(node)
     })
 
+    const ensureAdjacencyEntry = (nodeId: string) => {
+      if (!adjacency.has(nodeId)) {
+        adjacency.set(nodeId, new Set())
+      }
+    }
+
+    const ensureIncomingEntry = (nodeId: string) => {
+      if (!incomingSources.has(nodeId)) {
+        incomingSources.set(nodeId, new Set())
+      }
+    }
+
     nodes.forEach(node => {
       const nodeLevel = effectiveLevels.get(node.id) ?? 0
       if (nodeLevel <= 0) return
+      if ((incomingSources.get(node.id)?.size ?? 0) > 0) return
 
       const hasParentAtPrevLevel = result.some(conn => {
         if (conn.to !== node.id) return false
@@ -218,6 +226,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         if (!existing.has(key)) {
           result.push({ from: parent.id, to: node.id, generated: true })
           existing.add(key)
+          ensureAdjacencyEntry(parent.id)
+          adjacency.get(parent.id)!.add(node.id)
+          ensureIncomingEntry(node.id)
+          incomingSources.get(node.id)!.add(parent.id)
         }
       }
     })
@@ -244,6 +256,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
 
       if (parentCandidates.length === 0) return
+      if ((incomingSources.get(node.id)?.size ?? 0) > 0) return
 
       const hasLeftParent = result.some(conn => {
         if (conn.to !== node.id) return false
@@ -265,6 +278,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         if (!existing.has(key)) {
           result.push({ from: parent.id, to: node.id, generated: true })
           existing.add(key)
+          ensureAdjacencyEntry(parent.id)
+          adjacency.get(parent.id)!.add(node.id)
+          ensureIncomingEntry(node.id)
+          incomingSources.get(node.id)!.add(parent.id)
         }
       }
     })
