@@ -159,61 +159,189 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
   const centerY = 300
   const levelSpacing = 600 // Much larger spacing between levels
   const nodeSpacing = 500 // Much larger spacing between nodes at same level
-  
-  // Create a map of page names to IDs
-  const pageNameToId = new Map<string, string>()
-  let nodeId = 1
-  
-  // Group pages by level
-  const pagesByLevel = new Map<number, any[]>()
-  const pageMetaByName = new Map<string, any>()
-  
-  if (data.pages && Array.isArray(data.pages)) {
-    data.pages.forEach((page: any) => {
-      const level = page.level || 0
-      if (typeof page.name === 'string' && !pageMetaByName.has(page.name)) {
-        pageMetaByName.set(page.name, page)
+
+  const normalizeName = (value: any, index: number): string => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (trimmed.length > 0) {
+        return trimmed
       }
-      if (!pagesByLevel.has(level)) {
-        pagesByLevel.set(level, [])
-      }
-      pagesByLevel.get(level)!.push(page)
-    })
+    }
+    return `Page ${index + 1}`
   }
+
+  const normalizeRefName = (value: any): string => {
+    if (typeof value !== 'string') return ''
+    return value.trim()
+  }
+
+  const rawPages: any[] = Array.isArray(data.pages) ? data.pages.filter(Boolean) : []
+  if (rawPages.length === 0) {
+    return { nodes, connections }
+  }
+
+  const pages = rawPages.map((page, index) => {
+    const normalizedName = normalizeName(page?.name, index)
+    return {
+      ...page,
+      name: normalizedName,
+    }
+  })
+
+  const pageMetaByName = new Map<string, any>()
+  pages.forEach(page => {
+    if (!pageMetaByName.has(page.name)) {
+      pageMetaByName.set(page.name, page)
+    }
+  })
 
   const parentCandidatesByChild = new Map<string, string[]>()
-  if (data.connections && Array.isArray(data.connections)) {
+  const adjacencyByName = new Map<string, Set<string>>()
+  const incomingByName = new Map<string, Set<string>>()
+
+  if (Array.isArray(data.connections)) {
     data.connections.forEach((conn: any) => {
-      if (conn?.from && conn?.to && typeof conn.to === 'string' && typeof conn.from === 'string') {
-        if (!parentCandidatesByChild.has(conn.to)) {
-          parentCandidatesByChild.set(conn.to, [])
-        }
-        parentCandidatesByChild.get(conn.to)!.push(conn.from)
+      const fromName = normalizeRefName(conn?.from)
+      const toName = normalizeRefName(conn?.to)
+      if (!fromName || !toName) return
+      if (!adjacencyByName.has(fromName)) {
+        adjacencyByName.set(fromName, new Set())
       }
+      adjacencyByName.get(fromName)!.add(toName)
+      if (!incomingByName.has(toName)) {
+        incomingByName.set(toName, new Set())
+      }
+      incomingByName.get(toName)!.add(fromName)
+      if (!parentCandidatesByChild.has(toName)) {
+        parentCandidatesByChild.set(toName, [])
+      }
+      parentCandidatesByChild.get(toName)!.push(fromName)
     })
   }
 
-  const sortedLevels = Array.from(pagesByLevel.entries()).sort(([a], [b]) => a - b)
-  const resolvedParentByNodeId = new Map<string, string>()
+  const rootNameSet = new Set<string>()
+  pages.forEach(page => {
+    const explicitLevel = typeof page.level === 'number' ? page.level : undefined
+    const parentRef = normalizeRefName(page.parentId)
+    if (explicitLevel === 0 || parentRef === '' || parentRef === null) {
+      rootNameSet.add(page.name)
+    }
+  })
+
+  if (rootNameSet.size === 0) {
+    pages.forEach(page => {
+      if ((incomingByName.get(page.name)?.size ?? 0) === 0) {
+        rootNameSet.add(page.name)
+      }
+    })
+  }
+  if (rootNameSet.size === 0 && pages.length > 0) {
+    rootNameSet.add(pages[0].name)
+  }
+
+  const bfsLevels = new Map<string, number>()
+  const queue: Array<{ name: string; level: number }> = []
+  rootNameSet.forEach(name => queue.push({ name, level: 0 }))
+
+  while (queue.length > 0) {
+    const { name, level } = queue.shift()!
+    const existing = bfsLevels.get(name)
+    if (existing !== undefined && existing <= level) {
+      continue
+    }
+    bfsLevels.set(name, level)
+    const children = adjacencyByName.get(name)
+    if (children) {
+      children.forEach(child => {
+        queue.push({ name: child, level: level + 1 })
+      })
+    }
+  }
+
+  const finalLevels = new Map<string, number>()
+  pages.forEach(page => {
+    if (typeof page.level === 'number' && !Number.isNaN(page.level)) {
+      finalLevels.set(page.name, Math.max(0, Math.floor(page.level)))
+    }
+  })
+  bfsLevels.forEach((level, name) => {
+    const existing = finalLevels.get(name)
+    if (existing === undefined || level < existing) {
+      finalLevels.set(name, level)
+    }
+  })
+
+  const resolveLevelForName = (name: string, stack = new Set<string>()): number => {
+    if (finalLevels.has(name)) {
+      return finalLevels.get(name)!
+    }
+    if (stack.has(name)) {
+      finalLevels.set(name, 0)
+      return 0
+    }
+    stack.add(name)
+    const page = pageMetaByName.get(name)
+    const declaredParentName = page && typeof page.parentId === 'string' ? page.parentId.trim() : undefined
+    const connectionParents = parentCandidatesByChild.get(name) ?? []
+    const parentName = declaredParentName && declaredParentName.length > 0
+      ? declaredParentName
+      : connectionParents[0]
+
+    if (parentName && parentName !== name) {
+      const parentLevel = resolveLevelForName(parentName, stack)
+      const computedLevel = parentLevel + 1
+      finalLevels.set(name, computedLevel)
+      stack.delete(name)
+      return computedLevel
+    }
+
+    stack.delete(name)
+    const fallbackLevel = rootNameSet.has(name) ? 0 : 1
+    finalLevels.set(name, fallbackLevel)
+    return fallbackLevel
+  }
+
+  pages.forEach(page => {
+    resolveLevelForName(page.name)
+  })
+
+  finalLevels.forEach((level, name) => {
+    const meta = pageMetaByName.get(name)
+    if (meta) {
+      meta.level = level
+    }
+  })
+
+  const pagesByLevel = new Map<number, any[]>()
+  pages.forEach(page => {
+    const normalizedLevel = finalLevels.get(page.name) ?? 0
+    if (!pagesByLevel.has(normalizedLevel)) {
+      pagesByLevel.set(normalizedLevel, [])
+    }
+    pagesByLevel.get(normalizedLevel)!.push(page)
+  })
+
+  const pageNameToId = new Map<string, string>()
+  const parentIdByNodeId = new Map<string, string>()
   const rootNodeIds: string[] = []
+  let nodeId = 1
+
+  const sortedLevels = Array.from(pagesByLevel.entries()).sort(([a], [b]) => a - b)
   
-  // Generate nodes with coordinates
-  sortedLevels.forEach(([level, pages]) => {
-    pages.forEach((page, index) => {
+  sortedLevels.forEach(([level, levelPages]) => {
+    levelPages.forEach((page, index) => {
       const id = nodeId.toString()
       pageNameToId.set(page.name, id)
-      
+
       let x = centerX
       let y = centerY
-      
+
       if (level === 0) {
-        // Home page - center
         x = centerX
         y = centerY
         rootNodeIds.push(id)
       } else if (level === 1) {
-        // Level 1 - around home in a circle
-        const angle = (index / pages.length) * Math.PI * 2
+        const angle = (index / levelPages.length) * Math.PI * 2
         x = centerX + Math.cos(angle) * levelSpacing
         y = centerY + Math.sin(angle) * levelSpacing
 
@@ -224,24 +352,20 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
           ? pageNameToId.get(declaredParentName)
           : rootNodeIds[0]
         if (candidateParentId) {
-          resolvedParentByNodeId.set(id, candidateParentId)
+          parentIdByNodeId.set(id, candidateParentId)
         }
       } else {
-        // Level 2+ - find parent and position relative to it
         const declaredParentName = typeof page.parentId === 'string' && page.parentId.trim().length > 0
           ? page.parentId.trim()
           : undefined
         const connectionParents = parentCandidatesByChild.get(page.name) ?? []
-
-        const levelValue = typeof page.level === 'number' ? page.level : level
         const preferredParentName =
           declaredParentName ??
           connectionParents.find(parent => {
             const parentMeta = pageMetaByName.get(parent)
             if (!parentMeta) return false
-            const parentLevel = typeof parentMeta.level === 'number' ? parentMeta.level : (parentMeta.level === 0 ? 0 : undefined)
-            if (parentLevel === undefined) return false
-            return parentLevel === levelValue - 1
+            const parentLevel = typeof parentMeta.level === 'number' ? parentMeta.level : 0
+            return parentLevel === level - 1
           }) ??
           (connectionParents.length > 0 ? connectionParents[0] : undefined)
 
@@ -249,17 +373,15 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
           const parentId = pageNameToId.get(preferredParentName)
           const parentNode = parentId ? nodes.find(n => n.id === parentId) : undefined
           if (parentNode) {
-            const siblingPool = pages.filter((p: any) => {
+            const siblingPool = levelPages.filter((p: any) => {
               const pDeclaredParent = typeof p.parentId === 'string' && p.parentId.trim().length > 0
                 ? p.parentId.trim()
                 : undefined
               if (pDeclaredParent === preferredParentName) return true
               const pConnectionParents = parentCandidatesByChild.get(p.name) ?? []
               if (pConnectionParents.includes(preferredParentName)) {
-                const pLevel = typeof p.level === 'number' ? p.level : level
-                if (typeof levelValue === 'number' && typeof pLevel === 'number' && Math.abs(pLevel - levelValue) <= 1) {
-                  return true
-                }
+                const pLevel = finalLevels.get(p.name) ?? level
+                return pLevel === level
               }
               return false
             })
@@ -269,27 +391,26 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
             const offset = (normalizedIndex - sameParentSiblings.length / 2 + 0.5) * nodeSpacing
             x = parentNode.x + offset
             y = parentNode.y + levelSpacing
-            resolvedParentByNodeId.set(id, parentNode.id)
+            parentIdByNodeId.set(id, parentNode.id)
           }
         }
 
         if (x === centerX && y === centerY) {
-          // Fallback if parent not found
-          const parentCandidates = data.pages.filter((p: any) => p.isParent && p.level === level - 1)
+          const parentCandidates = pages.filter((p: any) => p.isParent && (finalLevels.get(p.name) ?? 0) === level - 1)
           if (parentCandidates.length > 0) {
             const fallbackParent = parentCandidates[0]
             const parentId = pageNameToId.get(fallbackParent.name)
-            const parentNode = nodes.find(n => n.id === parentId)
+            const parentNode = parentId ? nodes.find(n => n.id === parentId) : undefined
             if (parentNode) {
-              const offset = (index - pages.length / 2) * nodeSpacing
+              const offset = (index - levelPages.length / 2) * nodeSpacing
               x = parentNode.x + offset
               y = parentNode.y + levelSpacing
-              resolvedParentByNodeId.set(id, parentNode.id)
+              parentIdByNodeId.set(id, parentNode.id)
             }
           }
         }
       }
-      
+
       nodes.push({
         id,
         name: page.name,
@@ -297,13 +418,13 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
         x: Math.round(x),
         y: Math.round(y),
         isParent: page.isParent || false,
-        level: level,
+        level,
       })
-      
+
       nodeId++
     })
   })
-  
+
   const nodesById = new Map<string, SiteFlowNode>(nodes.map(node => [node.id, node]))
   const nodesByLevel = new Map<number, SiteFlowNode[]>()
   nodes.forEach(node => {
@@ -326,7 +447,7 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
     rebuiltConnections.push({ from: fromId, to: toId })
   }
 
-  resolvedParentByNodeId.forEach((parentId, childId) => {
+  parentIdByNodeId.forEach((parentId, childId) => {
     addConnection(parentId, childId)
   })
 
@@ -375,7 +496,7 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
     if (level <= 0) {
       return
     }
-    if (resolvedParentByNodeId.has(node.id)) {
+    if (parentIdByNodeId.has(node.id)) {
       return
     }
     const fallbackParentId = findFallbackParentId(node)
