@@ -57,6 +57,16 @@ const ensureString = (value: unknown): string | undefined => {
   return undefined
 }
 
+const buildStringVariants = (value: string): string[] => {
+  const trimmed = value.trim()
+  if (!trimmed) return []
+  const lower = trimmed.toLowerCase()
+  const compact = lower.replace(/[^a-z0-9]/gi, '')
+  const kebab = lower.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')
+  const variants = new Set([trimmed, lower, compact, kebab])
+  return Array.from(variants).filter(Boolean)
+}
+
 const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
   if (!data || !Array.isArray(data.nodes)) {
     return { nodes: [], connections: [] }
@@ -69,15 +79,19 @@ const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
 
   const registerId = (raw: unknown, normalized: string) => {
     const key = ensureString(raw)
-    if (!key || idLookup.has(key)) return
-    idLookup.set(key, normalized)
+    if (!key) return
+    buildStringVariants(key).forEach(variant => {
+      if (!variant || idLookup.has(variant)) return
+      idLookup.set(variant, normalized)
+    })
   }
 
   const registerName = (rawName: unknown, normalized: string) => {
     if (typeof rawName !== 'string') return
-    const key = rawName.trim().toLowerCase()
-    if (!key || nameLookup.has(key)) return
-    nameLookup.set(key, normalized)
+    buildStringVariants(rawName).forEach(variant => {
+      if (!variant || nameLookup.has(variant)) return
+      nameLookup.set(variant, normalized)
+    })
   }
 
   const makeUniqueId = (base: string, existing: Set<string>) => {
@@ -116,9 +130,15 @@ const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
   const resolveRef = (raw: unknown): string | undefined => {
     const key = ensureString(raw)
     if (!key) return undefined
-    if (idLookup.has(key)) return idLookup.get(key)
-    const lower = key.toLowerCase()
-    if (nameLookup.has(lower)) return nameLookup.get(lower)
+    const variants = buildStringVariants(key)
+    for (const variant of variants) {
+      if (idLookup.has(variant)) {
+        return idLookup.get(variant)
+      }
+      if (nameLookup.has(variant)) {
+        return nameLookup.get(variant)
+      }
+    }
     return undefined
   }
 
