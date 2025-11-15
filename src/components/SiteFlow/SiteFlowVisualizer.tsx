@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
-import { type SiteFlowData } from '../../utils/siteFlowUtils'
+import { type SiteFlowData, exportSiteFlowAsImage, exportSiteFlowAsJSON } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
 
 interface Node {
@@ -204,6 +204,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
   const [history, setHistory] = useState<SiteFlowData[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const [isExportingImage, setIsExportingImage] = useState(false)
   const searchQuery: string = ''
   const canvasRef = useRef<HTMLDivElement>(null)
   const editInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
@@ -428,6 +429,32 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     const selected = Array.from(selectedNodes).map(id => nodes.find(n => n.id === id)).filter(Boolean)
     localStorage.setItem('siteflow-clipboard', JSON.stringify(selected))
   }
+
+  const handleExportJSON = useCallback(() => {
+    if (!latestSiteFlowRef.current || latestSiteFlowRef.current.nodes.length === 0) {
+      return
+    }
+    try {
+      exportSiteFlowAsJSON(latestSiteFlowRef.current, 'site-flow')
+    } catch (error) {
+      console.error('Failed to export site flow JSON:', error)
+    }
+  }, [])
+
+  const handleExportImage = useCallback(async () => {
+    if (!canvasContainerRef.current || !latestSiteFlowRef.current || latestSiteFlowRef.current.nodes.length === 0) {
+      return
+    }
+    if (isExportingImage) return
+    setIsExportingImage(true)
+    try {
+      await exportSiteFlowAsImage(canvasContainerRef.current, 'site-flow')
+    } catch (error) {
+      console.error('Failed to export site flow image:', error)
+    } finally {
+      setIsExportingImage(false)
+    }
+  }, [isExportingImage])
 
   const pasteNodes = (x: number, y: number) => {
     const clipboard = localStorage.getItem('siteflow-clipboard')
@@ -1316,6 +1343,26 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={handleExportJSON}
+            disabled={!latestSiteFlowRef.current || latestSiteFlowRef.current.nodes.length === 0}
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Export JSON
+          </button>
+          <button
+            onClick={handleExportImage}
+            disabled={
+              isExportingImage ||
+              !latestSiteFlowRef.current ||
+              latestSiteFlowRef.current.nodes.length === 0
+            }
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isExportingImage ? 'Exporting…' : 'Export Image'}
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
             onClick={() => handleZoom(-0.1)}
             className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
           >
@@ -1358,9 +1405,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           if (e.target === e.currentTarget) {
             handleContextMenu(e)
           }
-        }}
-        onWheel={(e) => {
-          e.preventDefault()
         }}
       >
         <div
