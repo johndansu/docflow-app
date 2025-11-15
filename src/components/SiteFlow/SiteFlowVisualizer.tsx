@@ -173,6 +173,87 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
   }, [nodes, renderedConnections])
 
+  useEffect(() => {
+    if (nodes.length === 0) return
+
+    const nodeLevels = new Map<string, number>()
+    nodes.forEach(node => {
+      nodeLevels.set(node.id, typeof node.level === 'number' ? node.level : 0)
+    })
+
+    const nodesByLevel = new Map<number, Node[]>()
+    nodes.forEach(node => {
+      const level = nodeLevels.get(node.id) ?? 0
+      if (!nodesByLevel.has(level)) {
+        nodesByLevel.set(level, [])
+      }
+      nodesByLevel.get(level)!.push(node)
+    })
+
+    const incomingCounts = new Map<string, number>()
+    connections.forEach(conn => {
+      incomingCounts.set(conn.to, (incomingCounts.get(conn.to) ?? 0) + 1)
+    })
+
+    const connectionKeys = new Set(connections.map(conn => `${conn.from}->${conn.to}`))
+    const additions: Connection[] = []
+
+    const findParentCandidates = (level: number): Node[] => {
+      if (level <= 0) return []
+      const direct = nodesByLevel.get(level - 1)
+      if (direct && direct.length > 0) {
+        return direct
+      }
+      for (let candidateLevel = level - 2; candidateLevel >= 0; candidateLevel--) {
+        const nodesAtLevel = nodesByLevel.get(candidateLevel)
+        if (nodesAtLevel && nodesAtLevel.length > 0) {
+          return nodesAtLevel
+        }
+      }
+      return []
+    }
+
+    nodes.forEach(node => {
+      const level = nodeLevels.get(node.id) ?? 0
+      if (level <= 0) return
+      if ((incomingCounts.get(node.id) ?? 0) > 0) return
+
+      const parentCandidates = findParentCandidates(level)
+      if (parentCandidates.length === 0) return
+
+      const parent = parentCandidates.reduce((closest, candidate) => {
+        if (candidate.id === node.id) return closest
+        if (!closest) return candidate
+        const candidateDistance = Math.abs(candidate.y - node.y)
+        const closestDistance = Math.abs(closest.y - node.y)
+        return candidateDistance < closestDistance ? candidate : closest
+      }, undefined as Node | undefined)
+
+      if (!parent || parent.id === node.id) return
+
+      const key = `${parent.id}->${node.id}`
+      if (connectionKeys.has(key)) return
+
+      connectionKeys.add(key)
+      additions.push({ from: parent.id, to: node.id })
+    })
+
+    if (additions.length === 0) return
+
+    setConnections(prev => {
+      const prevKeys = new Set(prev.map(conn => `${conn.from}->${conn.to}`))
+      const nextConnections = [...prev]
+      additions.forEach(conn => {
+        const key = `${conn.from}->${conn.to}`
+        if (!prevKeys.has(key)) {
+          prevKeys.add(key)
+          nextConnections.push(conn)
+        }
+      })
+      return nextConnections
+    })
+  }, [nodes, connections])
+
   useImperativeHandle(ref, () => ({
     getCurrentSiteFlow: () => latestSiteFlowRef.current,
   }), [])
@@ -669,13 +750,15 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     if (!node) return
 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const offsetX = e.clientX - rect.left
-    const offsetY = e.clientY - rect.top
+    const rawOffsetX = e.clientX - rect.left
+    const rawOffsetY = e.clientY - rect.top
+    const offsetX = rawOffsetX / zoom
+    const offsetY = rawOffsetY / zoom
 
     setDraggingNode(nodeId)
     setDragOffset({ x: offsetX, y: offsetY })
     e.preventDefault()
-  }, [nodes, editingNode])
+  }, [nodes, editingNode, zoom])
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (isPanning && canvasRef.current) {
