@@ -45,6 +45,122 @@ const CONNECTION_SHORT_LINK_OFFSET = 90
 const CONNECTION_STROKE_WIDTH = 2.4
 const CONNECTION_STROKE_WIDTH_ACTIVE = 3.6
 
+const ensureString = (value: unknown): string | undefined => {
+  if (value === undefined || value === null) return undefined
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : undefined
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value)
+  }
+  return undefined
+}
+
+const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
+  if (!data || !Array.isArray(data.nodes)) {
+    return { nodes: [], connections: [] }
+  }
+
+  const normalizedNodes: Node[] = []
+  const rawNodes = data.nodes.filter(Boolean)
+  const idLookup = new Map<string, string>()
+  const nameLookup = new Map<string, string>()
+
+  const registerId = (raw: unknown, normalized: string) => {
+    const key = ensureString(raw)
+    if (!key || idLookup.has(key)) return
+    idLookup.set(key, normalized)
+  }
+
+  const registerName = (rawName: unknown, normalized: string) => {
+    if (typeof rawName !== 'string') return
+    const key = rawName.trim().toLowerCase()
+    if (!key || nameLookup.has(key)) return
+    nameLookup.set(key, normalized)
+  }
+
+  const makeUniqueId = (base: string, existing: Set<string>) => {
+    let candidate = base
+    let counter = 1
+    while (existing.has(candidate)) {
+      candidate = `${base}-${counter}`
+      counter++
+    }
+    return candidate
+  }
+
+  const existingIds = new Set<string>()
+
+  rawNodes.forEach((node, index) => {
+    const baseId = ensureString(node?.id) ?? `node-${index + 1}`
+    const uniqueId = makeUniqueId(baseId, existingIds)
+    existingIds.add(uniqueId)
+    registerId(node?.id, uniqueId)
+    registerId(baseId, uniqueId)
+    registerId(uniqueId, uniqueId)
+    registerName(node?.name, uniqueId)
+
+    normalizedNodes.push({
+      id: uniqueId,
+      name: typeof node?.name === 'string' && node.name.trim().length > 0 ? node.name : `Page ${index + 1}`,
+      description: typeof node?.description === 'string' ? node.description : '',
+      x: typeof node?.x === 'number' && Number.isFinite(node.x) ? node.x : 0,
+      y: typeof node?.y === 'number' && Number.isFinite(node.y) ? node.y : 0,
+      isParent: typeof node?.isParent === 'boolean' ? node.isParent : undefined,
+      level: typeof node?.level === 'number' && Number.isFinite(node.level) ? node.level : undefined,
+      parentId: undefined,
+    })
+  })
+
+  const resolveRef = (raw: unknown): string | undefined => {
+    const key = ensureString(raw)
+    if (!key) return undefined
+    if (idLookup.has(key)) return idLookup.get(key)
+    const lower = key.toLowerCase()
+    if (nameLookup.has(lower)) return nameLookup.get(lower)
+    return undefined
+  }
+
+  normalizedNodes.forEach((node, index) => {
+    const rawParent = rawNodes[index]?.parentId
+    const resolvedParent = resolveRef(rawParent)
+    if (resolvedParent && resolvedParent !== node.id) {
+      node.parentId = resolvedParent
+    }
+  })
+
+  const normalizedConnections: Connection[] = []
+  const connectionKeys = new Set<string>()
+  const addConnection = (from?: string, to?: string) => {
+    if (!from || !to || from === to) return
+    const key = `${from}->${to}`
+    if (connectionKeys.has(key)) return
+    connectionKeys.add(key)
+    normalizedConnections.push({ from, to })
+  }
+
+  if (Array.isArray(data.connections)) {
+    data.connections.forEach((connection) => {
+      if (!connection) return
+      const from = resolveRef(connection.from)
+      const to = resolveRef(connection.to)
+      addConnection(from, to)
+    })
+  }
+
+  normalizedNodes.forEach(node => {
+    if (node.parentId) {
+      addConnection(node.parentId, node.id)
+    }
+  })
+
+  return {
+    nodes: normalizedNodes,
+    connections: normalizedConnections,
+  }
+}
+
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
   prdContent,
@@ -229,8 +345,9 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   useEffect(() => {
     // If initial site flow is provided, use it and don't regenerate
     if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
-      setNodes(initialSiteFlow.nodes)
-      setConnections(initialSiteFlow.connections)
+      const normalizedFlow = normalizeSiteFlowData(initialSiteFlow)
+      setNodes(normalizedFlow.nodes)
+      setConnections(normalizedFlow.connections)
       return
     }
     
@@ -388,11 +505,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       console.log('🤖 Generating site flow from PRD with AI...')
       const aiFlow = await generateSiteFlowWithAI(prdContent, true)
       if (aiFlow.nodes.length > 0) {
-        setNodes(aiFlow.nodes)
-        setConnections(aiFlow.connections)
+        const normalizedFlow = normalizeSiteFlowData(aiFlow)
+        setNodes(normalizedFlow.nodes)
+        setConnections(normalizedFlow.connections)
         // Save to history after state updates
         setTimeout(() => {
-          const currentState: SiteFlowData = { nodes: aiFlow.nodes, connections: aiFlow.connections }
+          const currentState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
           setHistory(prev => {
             const newHistory = prev.slice(0, historyIndex + 1)
             newHistory.push(currentState)
@@ -422,11 +540,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       console.log('🤖 Generating site flow with AI...')
       const aiFlow = await generateSiteFlowWithAI(description, false)
       if (aiFlow.nodes.length > 0) {
-        setNodes(aiFlow.nodes)
-        setConnections(aiFlow.connections)
+        const normalizedFlow = normalizeSiteFlowData(aiFlow)
+        setNodes(normalizedFlow.nodes)
+        setConnections(normalizedFlow.connections)
         // Save to history after state updates
         setTimeout(() => {
-          const currentState: SiteFlowData = { nodes: aiFlow.nodes, connections: aiFlow.connections }
+          const currentState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
           setHistory(prev => {
             const newHistory = prev.slice(0, historyIndex + 1)
             newHistory.push(currentState)
@@ -700,11 +819,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
     }
 
-    setNodes(generatedPages)
-    setConnections(generatedConnections)
+    const normalizedFlow = normalizeSiteFlowData({ nodes: generatedPages, connections: generatedConnections })
+    setNodes(normalizedFlow.nodes)
+    setConnections(normalizedFlow.connections)
     
     // Initialize history with generated flow
-    const initialState: SiteFlowData = { nodes: generatedPages, connections: generatedConnections }
+    const initialState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
     setHistory([initialState])
     setHistoryIndex(0)
     
