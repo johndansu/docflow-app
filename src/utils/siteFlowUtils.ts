@@ -21,6 +21,7 @@ const EXPORT_ROOT_ATTR = 'data-siteflow-export-root'
 const COLOR_PROPERTIES: Array<keyof CSSStyleDeclaration> = [
   'color',
   'backgroundColor',
+  'background',
   'borderColor',
   'borderTopColor',
   'borderRightColor',
@@ -69,9 +70,20 @@ const sanitizeColorsForExport = (doc: Document, rootElement: HTMLElement) => {
         }
       }
     })
-    const backgroundImage = computed.backgroundImage
-    if (backgroundImage && (backgroundImage.includes('oklab') || backgroundImage.includes('color('))) {
-      element.style.backgroundImage = 'none'
+    const normalizeBackground = (value: string | null) => {
+      if (!value) return
+      if (value.includes('oklab') || value.includes('color(') || value.includes('color-mix')) {
+        return 'none'
+      }
+      return value
+    }
+    const backgroundImage = normalizeBackground(computed.backgroundImage)
+    if (backgroundImage) {
+      element.style.backgroundImage = backgroundImage
+    }
+    const background = normalizeBackground(computed.background)
+    if (background === 'none') {
+      element.style.background = 'none'
     }
   })
 }
