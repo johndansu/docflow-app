@@ -13,6 +13,7 @@ export interface SiteFlowNode {
   y: number
   isParent?: boolean
   level?: number
+  parentId?: string
 }
 
 export interface SiteFlowConnection {
@@ -419,6 +420,7 @@ function convertToSiteFlowStructure(data: any): SiteFlowStructure {
         y: Math.round(y),
         isParent: page.isParent || false,
         level,
+        parentId: parentIdByNodeId.get(id),
       })
 
       nodeId++
@@ -542,6 +544,7 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
       x: centerX - 400,
       y: centerY,
       level: 1,
+      parentId: '1',
     })
     connections.push({ from: '1', to: nodeId.toString() })
     nodeId++
@@ -556,6 +559,7 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
       y: centerY,
       isParent: true,
       level: 1,
+      parentId: '1',
     })
     connections.push({ from: '1', to: nodeId.toString() })
     nodeId++
@@ -570,6 +574,7 @@ function generateSiteFlowFallback(description: string): SiteFlowStructure {
       y: centerY - 300,
       isParent: true,
       level: 1,
+      parentId: '1',
     })
     connections.push({ from: '1', to: nodeId.toString() })
     nodeId++

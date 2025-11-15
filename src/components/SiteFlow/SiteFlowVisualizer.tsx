@@ -10,6 +10,7 @@ interface Node {
   y: number
   isParent?: boolean
   level?: number
+  parentId?: string
 }
 
 interface Connection {
@@ -82,14 +83,24 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
     const result: RenderedConnection[] = []
     const existing = new Set<string>()
-    connections.forEach(conn => {
-      if (!conn || !conn.from || !conn.to) return
-      if (!nodesById.has(conn.from) || !nodesById.has(conn.to)) return
-      if (conn.from === conn.to) return
-      const key = `${conn.from}->${conn.to}`
+
+    const addRenderedConnection = (fromId: string, toId: string, generated = false) => {
+      if (!nodesById.has(fromId) || !nodesById.has(toId)) return
+      if (fromId === toId) return
+      const key = `${fromId}->${toId}`
       if (existing.has(key)) return
       existing.add(key)
-      result.push(conn)
+      result.push(generated ? { from: fromId, to: toId, generated: true } : { from: fromId, to: toId })
+    }
+
+    connections.forEach(conn => {
+      if (!conn || !conn.from || !conn.to) return
+      addRenderedConnection(conn.from, conn.to, false)
+    })
+
+    nodes.forEach(node => {
+      if (!node.parentId) return
+      addRenderedConnection(node.parentId, node.id, true)
     })
 
     return result
@@ -176,83 +187,27 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   useEffect(() => {
     if (nodes.length === 0) return
 
-    const nodeLevels = new Map<string, number>()
-    nodes.forEach(node => {
-      nodeLevels.set(node.id, typeof node.level === 'number' ? node.level : 0)
-    })
-
-    const nodesByLevel = new Map<number, Node[]>()
-    nodes.forEach(node => {
-      const level = nodeLevels.get(node.id) ?? 0
-      if (!nodesByLevel.has(level)) {
-        nodesByLevel.set(level, [])
-      }
-      nodesByLevel.get(level)!.push(node)
-    })
-
-    const incomingCounts = new Map<string, number>()
-    connections.forEach(conn => {
-      incomingCounts.set(conn.to, (incomingCounts.get(conn.to) ?? 0) + 1)
-    })
-
-    const connectionKeys = new Set(connections.map(conn => `${conn.from}->${conn.to}`))
-    const additions: Connection[] = []
-
-    const findParentCandidates = (level: number): Node[] => {
-      if (level <= 0) return []
-      const direct = nodesByLevel.get(level - 1)
-      if (direct && direct.length > 0) {
-        return direct
-      }
-      for (let candidateLevel = level - 2; candidateLevel >= 0; candidateLevel--) {
-        const nodesAtLevel = nodesByLevel.get(candidateLevel)
-        if (nodesAtLevel && nodesAtLevel.length > 0) {
-          return nodesAtLevel
-        }
-      }
-      return []
-    }
-
-    nodes.forEach(node => {
-      const level = nodeLevels.get(node.id) ?? 0
-      if (level <= 0) return
-      if ((incomingCounts.get(node.id) ?? 0) > 0) return
-
-      const parentCandidates = findParentCandidates(level)
-      if (parentCandidates.length === 0) return
-
-      const parent = parentCandidates.reduce((closest, candidate) => {
-        if (candidate.id === node.id) return closest
-        if (!closest) return candidate
-        const candidateDistance = Math.abs(candidate.y - node.y)
-        const closestDistance = Math.abs(closest.y - node.y)
-        return candidateDistance < closestDistance ? candidate : closest
-      }, undefined as Node | undefined)
-
-      if (!parent || parent.id === node.id) return
-
-      const key = `${parent.id}->${node.id}`
-      if (connectionKeys.has(key)) return
-
-      connectionKeys.add(key)
-      additions.push({ from: parent.id, to: node.id })
-    })
-
-    if (additions.length === 0) return
-
     setConnections(prev => {
-      const prevKeys = new Set(prev.map(conn => `${conn.from}->${conn.to}`))
-      const nextConnections = [...prev]
-      additions.forEach(conn => {
-        const key = `${conn.from}->${conn.to}`
-        if (!prevKeys.has(key)) {
-          prevKeys.add(key)
-          nextConnections.push(conn)
-        }
+      const existing = new Set(prev.map(conn => `${conn.from}->${conn.to}`))
+      const additions: Connection[] = []
+
+      nodes.forEach(node => {
+        if (!node.parentId) return
+        const parentExists = nodes.some(n => n.id === node.parentId)
+        if (!parentExists) return
+        const key = `${node.parentId}->${node.id}`
+        if (existing.has(key)) return
+        existing.add(key)
+        additions.push({ from: node.parentId, to: node.id })
       })
-      return nextConnections
+
+      if (additions.length === 0) {
+        return prev
+      }
+
+      return [...prev, ...additions]
     })
-  }, [nodes, connections])
+  }, [nodes])
 
   useImperativeHandle(ref, () => ({
     getCurrentSiteFlow: () => latestSiteFlowRef.current,
@@ -347,6 +302,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       const newNodes = copiedNodes.map((node: Node) => ({
         ...node,
         id: Date.now().toString() + Math.random(),
+        parentId: undefined,
         x: node.x + offsetX,
         y: node.y + offsetY,
       }))
@@ -525,6 +481,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         x: centerX - 400,
         y: centerY,
         level: 1,
+        parentId: '1',
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
       nodeId++
@@ -539,6 +496,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         y: centerY,
         isParent: true,
         level: 1,
+        parentId: '1',
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
       const dashboardId = nodeId.toString()
@@ -553,6 +511,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           x: centerX + 400,
           y: centerY + 300,
           level: 2,
+          parentId: dashboardId,
         })
         generatedConnections.push({ from: dashboardId, to: nodeId.toString() })
         nodeId++
@@ -566,6 +525,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           x: centerX + 600,
           y: centerY + 300,
           level: 2,
+          parentId: dashboardId,
         })
         generatedConnections.push({ from: dashboardId, to: nodeId.toString() })
         nodeId++
@@ -581,6 +541,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         y: centerY - 300,
         isParent: true,
         level: 1,
+        parentId: '1',
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
       const productsId = nodeId.toString()
@@ -594,6 +555,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         x: centerX + 300,
         y: centerY - 300,
         level: 2,
+        parentId: productsId,
       })
       generatedConnections.push({ from: productsId, to: nodeId.toString() })
       nodeId++
@@ -607,6 +569,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
           x: centerX,
           y: centerY - 150,
           level: 2,
+          parentId: productsId,
         })
         generatedConnections.push({ from: productsId, to: nodeId.toString() })
         nodeId++
@@ -621,6 +584,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         x: centerX - 400,
         y: centerY - 300,
         level: 1,
+        parentId: '1',
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
       const blogId = nodeId.toString()
@@ -634,6 +598,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         x: centerX - 400,
         y: centerY - 150,
         level: 2,
+        parentId: blogId,
       })
       generatedConnections.push({ from: blogId, to: nodeId.toString() })
       nodeId++
@@ -647,6 +612,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         x: centerX - 400,
         y: centerY + 300,
         level: 1,
+        parentId: '1',
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
       nodeId++
@@ -660,6 +626,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         x: centerX,
         y: centerY + 300,
         level: 1,
+        parentId: '1',
       })
       generatedConnections.push({ from: '1', to: nodeId.toString() })
       nodeId++
@@ -701,6 +668,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             x: centerX + Math.cos(angle) * radius,
             y: centerY + Math.sin(angle) * radius,
             level: 1,
+          parentId: '1',
           })
           generatedConnections.push({ from: '1', to: nodeId.toString() })
           nodeId++
@@ -721,6 +689,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             x: page.x,
             y: page.y,
             level: 1,
+            parentId: '1',
           })
           generatedConnections.push({ from: '1', to: nodeId.toString() })
           nodeId++
@@ -828,6 +797,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         )
         if (!connectionExists) {
           setConnections(prev => [...prev, { from: connectingFrom, to: nodeId }])
+          setNodes(prev => prev.map(node => node.id === nodeId ? { ...node, parentId: connectingFrom } : node))
           saveToHistory()
         }
       }
@@ -889,7 +859,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }
 
   const deleteNode = (nodeId: string) => {
-    setNodes(prev => prev.filter(n => n.id !== nodeId))
+    setNodes(prev => prev
+      .filter(n => n.id !== nodeId)
+      .map(n => n.parentId === nodeId ? { ...n, parentId: undefined } : n)
+    )
     setConnections(prev => prev.filter(c => c.from !== nodeId && c.to !== nodeId))
     setSelectedNodes(prev => {
       const newSet = new Set(prev)
@@ -923,6 +896,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       description: 'Child page description',
       x: parent.x + 200,
       y: parent.y + 150,
+      parentId,
     }
     setNodes(prev => [...prev, newNode])
     setConnections(prev => [...prev, { from: parentId, to: newNode.id }])

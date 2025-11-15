@@ -9,6 +9,7 @@ export interface SiteFlowData {
     y: number
     isParent?: boolean
     level?: number
+    parentId?: string
   }>
   connections: Array<{
     from: string
