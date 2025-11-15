@@ -1,41 +1,33 @@
-import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
-import { type SiteFlowData, exportSiteFlowAsImage, exportSiteFlowAsJSON } from '../../utils/siteFlowUtils'
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+  useMemo,
+} from 'react'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
-import curatedSiteFlow from '../../data/siteFlowBlueprint'
+import {
+  type SiteFlowData,
+  exportSiteFlowAsImage,
+  exportSiteFlowAsJSON,
+} from '../../utils/siteFlowUtils'
 
-interface Node {
-  id: string
-  name: string
-  description: string
+type FlowNode = SiteFlowData['nodes'][number]
+type PositionedNode = FlowNode & {
   x: number
   y: number
-  isParent?: boolean
-  level?: number
-  parentId?: string
+  level: number
 }
 
-interface Connection {
-  from: string
-  to: string
-}
-
-type RenderedConnection = Connection & { generated?: boolean }
-
-type FlowMode = 'idle' | 'blueprint' | 'generated' | 'imported' | 'custom'
-
-const FLOW_MODE_LABEL: Record<FlowMode, string> = {
-  idle: 'Idle',
-  blueprint: 'Blueprint',
-  generated: 'Generated',
-  imported: 'Imported',
-  custom: 'Custom',
-}
+type FlowMode = 'empty' | 'imported' | 'generated' | 'manual'
 
 interface SiteFlowVisualizerProps {
   appDescription?: string
   prdContent?: string
-  onSiteFlowChange?: (data: SiteFlowData) => void
   initialSiteFlow?: SiteFlowData
+  onSiteFlowChange?: (data: SiteFlowData) => void
 }
 
 export interface SiteFlowHandle {
@@ -44,23 +36,25 @@ export interface SiteFlowHandle {
 
 const NODE_WIDTH = 260
 const NODE_HEIGHT = 110
-const TARGET_ZOOM = 0.3
-const CANVAS_PADDING = 250
-const HORIZONTAL_SPACING = NODE_WIDTH + 220
-const LEAF_VERTICAL_SPACING = NODE_HEIGHT + 140
-const CONNECTION_START_GAP = 32
-const CONNECTION_END_GAP = 36
-const CONNECTION_MIN_HORIZONTAL_DISTANCE = 140
-const CONNECTION_CONTROL_MIN = 120
-const CONNECTION_SHORT_LINK_OFFSET = 90
-const CONNECTION_STROKE_WIDTH = 2.4
-const CONNECTION_STROKE_WIDTH_ACTIVE = 3.6
+const COLUMN_GAP = 220
+const ROW_GAP = 120
+const CANVAS_PADDING = 240
+const LINE_OFFSET = 32
+
+const FLOW_MODE_LABEL: Record<FlowMode, string> = {
+  empty: 'Empty',
+  imported: 'Imported',
+  generated: 'Generated',
+  manual: 'Manual',
+}
+
+const EMPTY_FLOW: SiteFlowData = { nodes: [], connections: [] }
 
 const ensureString = (value: unknown): string | undefined => {
   if (value === undefined || value === null) return undefined
   if (typeof value === 'string') {
     const trimmed = value.trim()
-    return trimmed.length > 0 ? trimmed : undefined
+    return trimmed.length ? trimmed : undefined
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
     return String(value)
@@ -68,1735 +62,615 @@ const ensureString = (value: unknown): string | undefined => {
   return undefined
 }
 
-const buildStringVariants = (value: string): string[] => {
-  const trimmed = value.trim()
-  if (!trimmed) return []
-  const lower = trimmed.toLowerCase()
-  const compact = lower.replace(/[^a-z0-9]/gi, '')
-  const kebab = lower.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')
-  const variants = new Set([trimmed, lower, compact, kebab])
-  return Array.from(variants).filter(Boolean)
-}
-
-const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
+const normalizeSiteFlow = (data?: SiteFlowData | null): SiteFlowData => {
   if (!data || !Array.isArray(data.nodes)) {
-    return { nodes: [], connections: [] }
+    return EMPTY_FLOW
   }
 
-  const normalizedNodes: Node[] = []
-  const rawNodes = data.nodes.filter(Boolean)
-  const idLookup = new Map<string, string>()
-  const nameLookup = new Map<string, string>()
+  const nodes: SiteFlowData['nodes'] = []
+  const idMap = new Map<string, string>()
+  const existingIds = new Set<string>()
 
-  const registerId = (raw: unknown, normalized: string) => {
-    const key = ensureString(raw)
-    if (!key) return
-    buildStringVariants(key).forEach(variant => {
-      if (!variant || idLookup.has(variant)) return
-      idLookup.set(variant, normalized)
-    })
-  }
-
-  const registerName = (rawName: unknown, normalized: string) => {
-    if (typeof rawName !== 'string') return
-    buildStringVariants(rawName).forEach(variant => {
-      if (!variant || nameLookup.has(variant)) return
-      nameLookup.set(variant, normalized)
-    })
-  }
-
-  const makeUniqueId = (base: string, existing: Set<string>) => {
+  const getUniqueId = (base: string) => {
     let candidate = base
     let counter = 1
-    while (existing.has(candidate)) {
+    while (existingIds.has(candidate)) {
       candidate = `${base}-${counter}`
-      counter++
+      counter += 1
     }
+    existingIds.add(candidate)
     return candidate
   }
 
-  const existingIds = new Set<string>()
-
-  rawNodes.forEach((node, index) => {
+  data.nodes.forEach((node, index) => {
     const baseId = ensureString(node?.id) ?? `node-${index + 1}`
-    const uniqueId = makeUniqueId(baseId, existingIds)
-    existingIds.add(uniqueId)
-    registerId(node?.id, uniqueId)
-    registerId(baseId, uniqueId)
-    registerId(uniqueId, uniqueId)
-    registerName(node?.name, uniqueId)
+    const uniqueId = getUniqueId(baseId)
+    idMap.set(baseId, uniqueId)
+    if (node?.id && node.id !== baseId) {
+      idMap.set(node.id, uniqueId)
+    }
 
-    normalizedNodes.push({
+    nodes.push({
       id: uniqueId,
-      name: typeof node?.name === 'string' && node.name.trim().length > 0 ? node.name : `Page ${index + 1}`,
-      description: typeof node?.description === 'string' ? node.description : '',
+      name: node?.name?.trim() || `Page ${index + 1}`,
+      description: node?.description?.trim() || '',
+      level: typeof node?.level === 'number' && Number.isFinite(node.level) ? node.level : 0,
       x: typeof node?.x === 'number' && Number.isFinite(node.x) ? node.x : 0,
       y: typeof node?.y === 'number' && Number.isFinite(node.y) ? node.y : 0,
-      isParent: typeof node?.isParent === 'boolean' ? node.isParent : undefined,
-      level: typeof node?.level === 'number' && Number.isFinite(node.level) ? node.level : undefined,
+      isParent: Boolean(node?.isParent),
       parentId: undefined,
     })
   })
 
-  const resolveRef = (raw: unknown): string | undefined => {
-    const key = ensureString(raw)
-    if (!key) return undefined
-    const variants = buildStringVariants(key)
-    for (const variant of variants) {
-      if (idLookup.has(variant)) {
-        return idLookup.get(variant)
-      }
-      if (nameLookup.has(variant)) {
-        return nameLookup.get(variant)
-      }
+  const connections: SiteFlowData['connections'] = []
+  const seenConnections = new Set<string>()
+
+  data.connections?.forEach(connection => {
+    if (!connection) return
+    const from = connection.from && idMap.get(connection.from) ? idMap.get(connection.from) : ensureString(connection.from)
+    const to = connection.to && idMap.get(connection.to) ? idMap.get(connection.to) : ensureString(connection.to)
+    if (!from || !to || from === to) return
+    if (!existingIds.has(from) || !existingIds.has(to)) return
+
+    const key = `${from}->${to}`
+    if (seenConnections.has(key)) return
+    seenConnections.add(key)
+    connections.push({ from, to })
+  })
+
+  return { nodes, connections }
+}
+
+const applyLayout = (data: SiteFlowData, force = false): SiteFlowData => {
+  if (!data.nodes.length) return data
+
+  const nodesById = new Map<string, PositionedNode>()
+  const incomingCounts = new Map<string, number>()
+  data.nodes.forEach(node => {
+    const safeLevel =
+      typeof node.level === 'number' && Number.isFinite(node.level) ? node.level : 0
+    nodesById.set(node.id, {
+      ...node,
+      x: Number.isFinite(node.x) ? (node.x as number) : 0,
+      y: Number.isFinite(node.y) ? (node.y as number) : 0,
+      level: safeLevel,
+    })
+  })
+
+  data.connections.forEach(({ from, to }) => {
+    if (!nodesById.has(from) || !nodesById.has(to)) return
+    incomingCounts.set(to, (incomingCounts.get(to) ?? 0) + 1)
+  })
+
+  const needsLayout = force || data.nodes.some(node => !Number.isFinite(node.x) || !Number.isFinite(node.y))
+
+  if (!needsLayout) {
+    return {
+      nodes: Array.from(nodesById.values()),
+      connections: data.connections,
     }
-    return undefined
   }
 
-  normalizedNodes.forEach((node, index) => {
-    const rawParent = rawNodes[index]?.parentId
-    const resolvedParent = resolveRef(rawParent)
-    if (resolvedParent && resolvedParent !== node.id) {
-      node.parentId = resolvedParent
+  const queue: Array<{ id: string; level: number }> = []
+
+  nodesById.forEach((_, id) => {
+    if ((incomingCounts.get(id) ?? 0) === 0) {
+      queue.push({ id, level: 0 })
     }
   })
 
-  const normalizedConnections: Connection[] = []
-  const connectionKeys = new Set<string>()
-  const addConnection = (from?: string, to?: string) => {
-    if (!from || !to || from === to) return
-    const key = `${from}->${to}`
-    if (connectionKeys.has(key)) return
-    connectionKeys.add(key)
-    normalizedConnections.push({ from, to })
+  if (queue.length === 0) {
+    const fallback = nodesById.keys().next().value
+    if (fallback) {
+      queue.push({ id: fallback, level: 0 })
+    }
   }
 
-  if (Array.isArray(data.connections)) {
-    data.connections.forEach((connection) => {
-      if (!connection) return
-      const from = resolveRef(connection.from)
-      const to = resolveRef(connection.to)
-      addConnection(from, to)
+  const assignedLevels = new Map<string, number>()
+  const adjacency = new Map<string, string[]>()
+  data.connections.forEach(({ from, to }) => {
+    if (!nodesById.has(from) || !nodesById.has(to)) return
+    if (!adjacency.has(from)) adjacency.set(from, [])
+    adjacency.get(from)!.push(to)
+  })
+
+  while (queue.length) {
+    const { id, level } = queue.shift()!
+    if (!nodesById.has(id)) continue
+    if (assignedLevels.has(id)) continue
+    assignedLevels.set(id, level)
+    adjacency.get(id)?.forEach(childId => {
+      queue.push({ id: childId, level: level + 1 })
     })
   }
 
-  normalizedNodes.forEach(node => {
-    if (node.parentId) {
-      addConnection(node.parentId, node.id)
+  nodesById.forEach((node, id) => {
+    if (!assignedLevels.has(id)) {
+      assignedLevels.set(id, node.level ?? 0)
     }
   })
 
+  const grouped = new Map<number, PositionedNode[]>()
+  nodesById.forEach((node, id) => {
+    const level = assignedLevels.get(id) ?? 0
+    node.level = level
+    if (!grouped.has(level)) grouped.set(level, [])
+    grouped.get(level)!.push(node)
+  })
+
+  const sortedLevels = Array.from(grouped.keys()).sort((a, b) => a - b)
+
+  sortedLevels.forEach(level => {
+    const nodesAtLevel = grouped.get(level)!
+    nodesAtLevel.sort((a, b) => a.name.localeCompare(b.name))
+    nodesAtLevel.forEach((node, index) => {
+      node.x = CANVAS_PADDING + level * (NODE_WIDTH + COLUMN_GAP)
+      node.y = CANVAS_PADDING + index * (NODE_HEIGHT + ROW_GAP)
+    })
+  })
+
   return {
-    nodes: normalizedNodes,
-    connections: normalizedConnections,
+    nodes: Array.from(nodesById.values()),
+    connections: data.connections,
   }
 }
 
-const PREBUILT_BLUEPRINT = normalizeSiteFlowData(curatedSiteFlow)
-const EMPTY_FLOW: SiteFlowData = { nodes: [], connections: [] }
-
-const cloneSiteFlowData = (data: SiteFlowData): SiteFlowData => ({
-  nodes: data.nodes.map(node => ({ ...node })),
-  connections: data.connections.map(connection => ({ ...connection })),
-})
+const createEmptyFlowState = (): SiteFlowData => ({ nodes: [], connections: [] })
+const createNodeId = () => `node-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
   prdContent,
-  onSiteFlowChange,
   initialSiteFlow,
+  onSiteFlowChange,
 }, ref) => {
-  const initialNormalizedFlow = useMemo(() => {
-    if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
-      return normalizeSiteFlowData(initialSiteFlow)
-    }
-    return EMPTY_FLOW
-  }, [initialSiteFlow])
-
-  const [nodes, setNodes] = useState<Node[]>(initialNormalizedFlow.nodes)
-  const [connections, setConnections] = useState<Connection[]>(initialNormalizedFlow.connections)
+  const normalizedInitial = applyLayout(normalizeSiteFlow(initialSiteFlow), true)
+  const [flow, setFlow] = useState<SiteFlowData>(normalizedInitial)
+  const [mode, setMode] = useState<FlowMode>(
+    normalizedInitial.nodes.length ? 'imported' : 'empty'
+  )
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
-  const [zoom, setZoom] = useState(0.3) // Default to 30% zoom
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
-  const [workspaceSize, setWorkspaceSize] = useState({ width: 2800, height: 1800 })
-  const [isPanning, setIsPanning] = useState(false)
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 })
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null)
-  const [editingNode, setEditingNode] = useState<string | null>(null)
-  const [editingField, setEditingField] = useState<'name' | 'description' | null>(null)
-  const [editValue, setEditValue] = useState('')
-  const [draggingNode, setDraggingNode] = useState<string | null>(null)
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
-  const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
-  const [history, setHistory] = useState<SiteFlowData[]>(
-    initialNormalizedFlow.nodes.length ? [initialNormalizedFlow] : []
-  )
-  const [historyIndex, setHistoryIndex] = useState(initialNormalizedFlow.nodes.length ? 0 : -1)
-  const [flowMode, setFlowMode] = useState<FlowMode>(
-    initialNormalizedFlow.nodes.length ? 'imported' : 'idle'
-  )
-  const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
-  const [isExportingImage, setIsExportingImage] = useState(false)
-  const searchQuery: string = ''
+  const [linkSource, setLinkSource] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const canvasRef = useRef<HTMLDivElement>(null)
-  const editInputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
-  const handleEditRef = (element: HTMLInputElement | HTMLTextAreaElement | null) => {
-    editInputRef.current = element
-  }
-  const canvasContainerRef = useRef<HTMLDivElement>(null)
-  const latestSiteFlowRef = useRef<SiteFlowData | null>(
-    initialNormalizedFlow.nodes.length ? initialNormalizedFlow : null
-  )
-  const canGenerateFlow = Boolean(
-    (prdContent && prdContent.trim().length > 0) ||
-    (appDescription && appDescription.trim().length > 0)
-  )
-
-  const applyFlowSnapshot = useCallback((flow: SiteFlowData, mode: FlowMode) => {
-    const normalized = normalizeSiteFlowData(flow)
-    setNodes(normalized.nodes)
-    setConnections(normalized.connections)
-    setHistory([normalized])
-    setHistoryIndex(0)
-    setFlowMode(mode)
-    setSelectedNodes(new Set())
-    setConnectingFrom(null)
-    setContextMenu(null)
-    latestSiteFlowRef.current = normalized.nodes.length ? normalized : null
-  }, [])
-
-  const renderedConnections: RenderedConnection[] = useMemo(() => {
-    const nodesById = new Map<string, Node>()
-    nodes.forEach(node => {
-      nodesById.set(node.id, node)
-    })
-
-    const result: RenderedConnection[] = []
-    const existing = new Set<string>()
-
-    const addRenderedConnection = (fromId: string, toId: string, generated = false) => {
-      if (!nodesById.has(fromId) || !nodesById.has(toId)) return
-      if (fromId === toId) return
-      const key = `${fromId}->${toId}`
-      if (existing.has(key)) return
-      existing.add(key)
-      result.push(generated ? { from: fromId, to: toId, generated: true } : { from: fromId, to: toId })
-    }
-
-    connections.forEach(conn => {
-      if (!conn || !conn.from || !conn.to) return
-      addRenderedConnection(conn.from, conn.to, false)
-    })
-
-    nodes.forEach(node => {
-      if (!node.parentId) return
-      addRenderedConnection(node.parentId, node.id, true)
-    })
-
-    return result
-  }, [connections, nodes])
-
-  useEffect(() => {
-    if (nodes.length === 0) return
-
-    const nodesById = new Map<string, Node>()
-    nodes.forEach(node => {
-      nodesById.set(node.id, node)
-    })
-
-    let maxNodeExtentX = 0
-    let maxNodeExtentY = 0
-
-    nodes.forEach(node => {
-      maxNodeExtentX = Math.max(maxNodeExtentX, node.x + NODE_WIDTH)
-      maxNodeExtentY = Math.max(maxNodeExtentY, node.y + NODE_HEIGHT)
-    })
-
-    let maxConnectionExtentX = maxNodeExtentX
-    let maxConnectionExtentY = maxNodeExtentY
-
-    const trackPoint = (x: number, y: number) => {
-      if (Number.isFinite(x)) {
-        maxConnectionExtentX = Math.max(maxConnectionExtentX, x)
-      }
-      if (Number.isFinite(y)) {
-        maxConnectionExtentY = Math.max(maxConnectionExtentY, y)
-      }
-    }
-
-    renderedConnections.forEach(connection => {
-      const fromNode = nodesById.get(connection.from)
-      const toNode = nodesById.get(connection.to)
-      if (!fromNode || !toNode) return
-
-      const isForward = fromNode.x <= toNode.x
-      const startX = isForward
-        ? fromNode.x + NODE_WIDTH + CONNECTION_START_GAP
-        : fromNode.x - CONNECTION_START_GAP
-      const startY = fromNode.y + NODE_HEIGHT / 2
-      const endX = isForward
-        ? toNode.x - CONNECTION_END_GAP
-        : toNode.x + NODE_WIDTH + CONNECTION_END_GAP
-      const endY = toNode.y + NODE_HEIGHT / 2
-
-      const horizontalDistance = Math.max(Math.abs(endX - startX), CONNECTION_MIN_HORIZONTAL_DISTANCE)
-      const verticalDistance = endY - startY
-      const controlOffset = Math.max(horizontalDistance * 0.5, CONNECTION_CONTROL_MIN)
-
-      const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
-      const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
-      const controlY1 = startY + verticalDistance * 0.25
-      const controlY2 = endY - verticalDistance * 0.25
-
-      trackPoint(startX, startY)
-      trackPoint(endX, endY)
-      trackPoint(controlX1, controlY1)
-      trackPoint(controlX2, controlY2)
-
-      if (horizontalDistance < 200 && Math.abs(verticalDistance) < 140) {
-        const midX = (startX + endX) / 2
-        const midY = (startY + endY) / 2
-        const shortControlX = isForward ? midX + CONNECTION_SHORT_LINK_OFFSET : midX - CONNECTION_SHORT_LINK_OFFSET
-        trackPoint(shortControlX, midY)
-      }
-    })
-
-    const requiredWidth = maxConnectionExtentX + CANVAS_PADDING
-    const requiredHeight = maxConnectionExtentY + CANVAS_PADDING
-
-    setWorkspaceSize(prev => {
-      const nextWidth = Math.max(prev.width, Math.ceil(requiredWidth))
-      const nextHeight = Math.max(prev.height, Math.ceil(requiredHeight))
-      if (nextWidth === prev.width && nextHeight === prev.height) {
-        return prev
-      }
-      return { width: nextWidth, height: nextHeight }
-    })
-  }, [nodes, renderedConnections])
+  const latestFlow = useRef<SiteFlowData | null>(normalizedInitial.nodes.length ? normalizedInitial : null)
 
   useImperativeHandle(ref, () => ({
-    getCurrentSiteFlow: () => latestSiteFlowRef.current,
+    getCurrentSiteFlow: () => latestFlow.current,
   }), [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const styleId = 'siteflow-supabase-animation'
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style')
-      style.id = styleId
-      style.textContent = `@keyframes siteflowSupabaseDash { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -400; } }`
-      document.head.appendChild(style)
+    if (flow.nodes.length === 0) {
+      latestFlow.current = null
+    } else {
+      latestFlow.current = flow
     }
-  }, [])
+    onSiteFlowChange?.(flow)
+  }, [flow, onSiteFlowChange])
 
   useEffect(() => {
     if (!initialSiteFlow || initialSiteFlow.nodes.length === 0) return
-    applyFlowSnapshot(initialSiteFlow, 'imported')
-  }, [initialSiteFlow, applyFlowSnapshot])
-
-  // Notify parent when site flow changes
-  useEffect(() => {
-    if (nodes.length > 0) {
-      const currentData: SiteFlowData = { nodes, connections }
-      latestSiteFlowRef.current = currentData
-      if (onSiteFlowChange) {
-        onSiteFlowChange(currentData)
-      }
-    } else {
-      latestSiteFlowRef.current = null
-    }
-  }, [nodes, connections, onSiteFlowChange])
-
-  // Save to history
-  const saveToHistory = useCallback(() => {
-    const snapshot: SiteFlowData = {
-      nodes: nodes.map(node => ({ ...node })),
-      connections: connections.map(connection => ({ ...connection })),
-    }
-    setHistory(prev => {
-      const base = historyIndex >= 0 ? prev.slice(0, historyIndex + 1) : []
-      base.push(snapshot)
-      return base.slice(-50)
-    })
-    setHistoryIndex(prev => Math.min(prev + 1, 49))
-  }, [nodes, connections, historyIndex])
-
-  // Undo/Redo
-  const undo = () => {
-    if (historyIndex <= 0) return
-    const prevState = history[historyIndex - 1]
-    setNodes(prevState.nodes.map(node => ({ ...node })))
-    setConnections(prevState.connections.map(connection => ({ ...connection })))
-    setHistoryIndex(prev => prev - 1)
-    latestSiteFlowRef.current = prevState
-  }
-
-  const redo = () => {
-    if (historyIndex < 0 || historyIndex >= history.length - 1) return
-    const nextState = history[historyIndex + 1]
-    setNodes(nextState.nodes.map(node => ({ ...node })))
-    setConnections(nextState.connections.map(connection => ({ ...connection })))
-    setHistoryIndex(prev => prev + 1)
-    latestSiteFlowRef.current = nextState
-  }
-
-  // Copy/Paste
-  const copySelectedNodes = () => {
-    if (selectedNodes.size === 0) return
-    const selected = Array.from(selectedNodes).map(id => nodes.find(n => n.id === id)).filter(Boolean)
-    localStorage.setItem('siteflow-clipboard', JSON.stringify(selected))
-  }
-
-  const handleExportJSON = useCallback(() => {
-    if (!latestSiteFlowRef.current || latestSiteFlowRef.current.nodes.length === 0) {
-      return
-    }
-    try {
-      exportSiteFlowAsJSON(latestSiteFlowRef.current, 'site-flow')
-    } catch (error) {
-      console.error('Failed to export site flow JSON:', error)
-    }
-  }, [])
-
-  const handleExportImage = useCallback(async () => {
-    if (!canvasContainerRef.current || !latestSiteFlowRef.current || latestSiteFlowRef.current.nodes.length === 0) {
-      return
-    }
-    if (isExportingImage) return
-    setIsExportingImage(true)
-    try {
-      await exportSiteFlowAsImage(canvasContainerRef.current, 'site-flow')
-    } catch (error) {
-      console.error('Failed to export site flow image:', error)
-    } finally {
-      setIsExportingImage(false)
-    }
-  }, [isExportingImage])
-
-  const handleGenerateFlowClick = async () => {
-    if (!canGenerateFlow || isGeneratingFlow) return
-    const trimmedPrd = prdContent?.trim()
-    const trimmedDescription = appDescription?.trim()
-    if (!trimmedPrd && !trimmedDescription) return
-
-    setIsGeneratingFlow(true)
-    try {
-      if (trimmedPrd) {
-        await generateFlowFromPRDAsync(trimmedPrd)
-      } else if (trimmedDescription) {
-        await generateFlowFromDescriptionAsync(trimmedDescription)
-      }
-    } finally {
-      setIsGeneratingFlow(false)
-    }
-  }
-
-  const handleLoadBlueprint = () => {
-    applyFlowSnapshot(cloneSiteFlowData(PREBUILT_BLUEPRINT), 'blueprint')
-  }
-
-  const handleResetFlow = () => {
-    setNodes([])
-    setConnections([])
+    const next = applyLayout(normalizeSiteFlow(initialSiteFlow), true)
+    setFlow(next)
+    setMode('imported')
     setSelectedNodes(new Set())
-    setConnectingFrom(null)
-    setContextMenu(null)
-    setHistory([])
-    setHistoryIndex(-1)
-    setFlowMode('idle')
-    latestSiteFlowRef.current = null
-  }
+    setLinkSource(null)
+  }, [initialSiteFlow])
 
-  const pasteNodes = (x: number, y: number) => {
-    const clipboard = localStorage.getItem('siteflow-clipboard')
-    if (!clipboard) return
-    
-    try {
-      const copiedNodes = JSON.parse(clipboard)
-      const offsetX = x - (copiedNodes[0]?.x || 0)
-      const offsetY = y - (copiedNodes[0]?.y || 0)
-      
-      const newNodes = copiedNodes.map((node: Node) => ({
-        ...node,
-        id: Date.now().toString() + Math.random(),
-        parentId: undefined,
-        x: node.x + offsetX,
-        y: node.y + offsetY,
-      }))
-      
-      setNodes(prev => [...prev, ...newNodes])
-      saveToHistory()
-    } catch (error) {
-      console.error('Failed to paste nodes:', error)
-    }
-  }
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, PositionedNode>()
+    flow.nodes.forEach(node => map.set(node.id, node as PositionedNode))
+    return map
+  }, [flow.nodes])
 
-  // Filtered nodes based on search
-  const filteredNodes = nodes
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (editingNode) return
-
-      // Delete selected nodes
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodes.size > 0) {
-        selectedNodes.forEach(id => deleteNode(id))
-        saveToHistory()
-      }
-
-      // Copy/Paste
-      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && selectedNodes.size > 0) {
-        e.preventDefault()
-        copySelectedNodes()
-      }
-
-      if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
-        e.preventDefault()
-        if (canvasRef.current) {
-          const rect = canvasRef.current.getBoundingClientRect()
-          pasteNodes(rect.width / 2, rect.height / 2)
-        }
-      }
-
-      // Undo/Redo
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault()
-        undo()
-      }
-
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault()
-        redo()
-      }
-
-      // Select all
-      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
-        e.preventDefault()
-        setSelectedNodes(new Set(nodes.map(n => n.id)))
-      }
-
-      // Escape
-      if (e.key === 'Escape') {
-        setSelectedNodes(new Set())
-        setConnectingFrom(null)
-        setContextMenu(null)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedNodes, nodes, editingNode, history, historyIndex])
-
-  useEffect(() => {
-    if (editingField && editInputRef.current) {
-      editInputRef.current.focus()
-      editInputRef.current.select()
-    }
-  }, [editingField])
-
-  const generateFlowFromPRDAsync = async (prdContent: string) => {
-    if (!prdContent || !prdContent.trim()) return
-    
-    // Try AI generation from PRD first
-    try {
-      console.log('🤖 Generating site flow from PRD with AI...')
-      const aiFlow = await generateSiteFlowWithAI(prdContent, true)
-      if (aiFlow.nodes.length > 0) {
-        applyFlowSnapshot(aiFlow, 'generated')
-        return
-      }
-    } catch (error) {
-      console.warn('AI generation from PRD failed, using fallback:', error)
-    }
-    
-    // Fallback to description-based generation
-    if (appDescription && appDescription.trim()) {
-      generateFlowFromDescription(appDescription)
-    }
-  }
-
-  const generateFlowFromDescriptionAsync = async (description: string) => {
-    if (!description || !description.trim()) return
-    
-    // Try AI generation first
-    try {
-      console.log('🤖 Generating site flow with AI...')
-      const aiFlow = await generateSiteFlowWithAI(description, false)
-      if (aiFlow.nodes.length > 0) {
-        applyFlowSnapshot(aiFlow, 'generated')
-        return
-      }
-    } catch (error) {
-      console.warn('AI generation failed, using fallback:', error)
-    }
-    
-    // Fallback to original method
-    generateFlowFromDescription(description)
-  }
-
-  const generateFlowFromDescription = (description: string) => {
-    if (!description || !description.trim()) return
-    
-    const descriptionLower = description.toLowerCase()
-    const generatedPages: Node[] = []
-    const generatedConnections: Connection[] = []
-
-    // Center starting point - nodes will be repositioned to visible space
-    // Use large initial spacing so they spread out before repositioning
-    const centerX = 1000
-    const centerY = 1000
-
-    // Always create Home page - center
-    const homeNode: Node = {
-      id: '1',
-      name: 'Home',
-      description: 'Landing page',
-      x: centerX,
-      y: centerY,
-      isParent: true,
-      level: 0,
-    }
-    generatedPages.push(homeNode)
-
-    let nodeId = 2
-    const level1Nodes: Node[] = []
-    const level2Nodes: Node[] = []
-
-    // Level 1 pages (directly from home)
-    if (descriptionLower.includes('login') || descriptionLower.includes('sign in') || descriptionLower.includes('account') || descriptionLower.includes('auth')) {
-      level1Nodes.push({
-        id: nodeId.toString(),
-        name: 'Login',
-        description: 'User authentication',
-        x: centerX - 400,
-        y: centerY,
-        level: 1,
-        parentId: '1',
-      })
-      generatedConnections.push({ from: '1', to: nodeId.toString() })
-      nodeId++
-    }
-
-    if (descriptionLower.includes('dashboard') || descriptionLower.includes('profile') || descriptionLower.includes('account')) {
-      level1Nodes.push({
-        id: nodeId.toString(),
-        name: 'Dashboard',
-        description: 'User dashboard',
-        x: centerX + 400,
-        y: centerY,
-        isParent: true,
-        level: 1,
-        parentId: '1',
-      })
-      generatedConnections.push({ from: '1', to: nodeId.toString() })
-      const dashboardId = nodeId.toString()
-      nodeId++
-
-      // Level 2 pages (children of dashboard)
-      if (descriptionLower.includes('profile') || descriptionLower.includes('settings')) {
-        level2Nodes.push({
-          id: nodeId.toString(),
-          name: 'Profile',
-          description: 'User profile',
-          x: centerX + 400,
-          y: centerY + 300,
-          level: 2,
-          parentId: dashboardId,
-        })
-        generatedConnections.push({ from: dashboardId, to: nodeId.toString() })
-        nodeId++
-      }
-
-      if (descriptionLower.includes('settings')) {
-        level2Nodes.push({
-          id: nodeId.toString(),
-          name: 'Settings',
-          description: 'User settings',
-          x: centerX + 600,
-          y: centerY + 300,
-          level: 2,
-          parentId: dashboardId,
-        })
-        generatedConnections.push({ from: dashboardId, to: nodeId.toString() })
-        nodeId++
-      }
-    }
-
-    if (descriptionLower.includes('product') || descriptionLower.includes('item') || descriptionLower.includes('shop') || descriptionLower.includes('store')) {
-      level1Nodes.push({
-        id: nodeId.toString(),
-        name: 'Products',
-        description: 'Product listing',
-        x: centerX,
-        y: centerY - 300,
-        isParent: true,
-        level: 1,
-        parentId: '1',
-      })
-      generatedConnections.push({ from: '1', to: nodeId.toString() })
-      const productsId = nodeId.toString()
-      nodeId++
-
-      // Product detail page
-      level2Nodes.push({
-        id: nodeId.toString(),
-        name: 'Product Detail',
-        description: 'Individual product',
-        x: centerX + 300,
-        y: centerY - 300,
-        level: 2,
-        parentId: productsId,
-      })
-      generatedConnections.push({ from: productsId, to: nodeId.toString() })
-      nodeId++
-
-      // Cart/Checkout
-      if (descriptionLower.includes('cart') || descriptionLower.includes('checkout') || descriptionLower.includes('purchase')) {
-        level2Nodes.push({
-          id: nodeId.toString(),
-          name: 'Cart',
-          description: 'Shopping cart',
-          x: centerX,
-          y: centerY - 150,
-          level: 2,
-          parentId: productsId,
-        })
-        generatedConnections.push({ from: productsId, to: nodeId.toString() })
-        nodeId++
-      }
-    }
-
-    if (descriptionLower.includes('blog') || descriptionLower.includes('article') || descriptionLower.includes('post') || descriptionLower.includes('news')) {
-      level1Nodes.push({
-        id: nodeId.toString(),
-        name: 'Blog',
-        description: 'Blog listing',
-        x: centerX - 400,
-        y: centerY - 300,
-        level: 1,
-        parentId: '1',
-      })
-      generatedConnections.push({ from: '1', to: nodeId.toString() })
-      const blogId = nodeId.toString()
-      nodeId++
-
-      // Blog post detail
-      level2Nodes.push({
-        id: nodeId.toString(),
-        name: 'Blog Post',
-        description: 'Article detail',
-        x: centerX - 400,
-        y: centerY - 150,
-        level: 2,
-        parentId: blogId,
-      })
-      generatedConnections.push({ from: blogId, to: nodeId.toString() })
-      nodeId++
-    }
-
-    if (descriptionLower.includes('about') || descriptionLower.includes('contact') || descriptionLower.includes('help')) {
-      level1Nodes.push({
-        id: nodeId.toString(),
-        name: 'About',
-        description: 'About page',
-        x: centerX - 400,
-        y: centerY + 300,
-        level: 1,
-        parentId: '1',
-      })
-      generatedConnections.push({ from: '1', to: nodeId.toString() })
-      nodeId++
-    }
-
-    if (descriptionLower.includes('contact') || descriptionLower.includes('support')) {
-      level1Nodes.push({
-        id: nodeId.toString(),
-        name: 'Contact',
-        description: 'Contact page',
-        x: centerX,
-        y: centerY + 300,
-        level: 1,
-        parentId: '1',
-      })
-      generatedConnections.push({ from: '1', to: nodeId.toString() })
-      nodeId++
-    }
-
-    // Add all nodes
-    generatedPages.push(...level1Nodes, ...level2Nodes)
-
-    // If no pages were generated from keywords, create a basic structure
-    if (level1Nodes.length === 0) {
-      // Try to extract page names from the description
-      const sentences = description.split(/[.!?]\s+/).filter(s => s.trim().length > 10)
-      const pageNames: string[] = []
-      
-      // Look for common patterns like "page for X", "section for Y", etc.
-      sentences.forEach(sentence => {
-        const lower = sentence.toLowerCase()
-        if (lower.includes('page') || lower.includes('section') || lower.includes('feature')) {
-          // Extract potential page name
-          const match = sentence.match(/(?:page|section|feature)\s+(?:for|about|with)?\s*([^,\.!?]+)/i)
-          if (match && match[1]) {
-            const pageName = match[1].trim().split(/\s+/).slice(0, 2).join(' ')
-            if (pageName && pageName.length > 2 && !pageNames.includes(pageName)) {
-              pageNames.push(pageName)
-            }
-          }
+  const connectionsToRender = useMemo(() => {
+    return flow.connections
+      .map(connection => {
+        const from = nodeMap.get(connection.from)
+        const to = nodeMap.get(connection.to)
+        if (!from || !to) return null
+        const startX = from.x + NODE_WIDTH + LINE_OFFSET
+        const startY = from.y + NODE_HEIGHT / 2
+        const endX = to.x - LINE_OFFSET
+        const endY = to.y + NODE_HEIGHT / 2
+        const controlOffset = Math.max(Math.abs(endX - startX) / 2, 90)
+        const controlX1 = startX + controlOffset
+        const controlX2 = endX - controlOffset
+        const controlY1 = startY
+        const controlY2 = endY
+        return {
+          id: `${connection.from}-${connection.to}`,
+          d: `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`,
+          from,
+          to,
         }
       })
-      
-      // Create basic pages if we found any
-      if (pageNames.length > 0) {
-        pageNames.slice(0, 4).forEach((name, idx) => {
-          const angle = (idx / pageNames.length) * Math.PI * 2
-          const radius = 400 // Increased radius for better spacing
-          level1Nodes.push({
-            id: nodeId.toString(),
-            name: name.charAt(0).toUpperCase() + name.slice(1),
-            description: `Page for ${name}`,
-            x: centerX + Math.cos(angle) * radius,
-            y: centerY + Math.sin(angle) * radius,
-            level: 1,
-          parentId: '1',
-          })
-          generatedConnections.push({ from: '1', to: nodeId.toString() })
-          nodeId++
-        })
-        generatedPages.push(...level1Nodes)
-      } else {
-        // Default pages if nothing found
-        const defaultPages = [
-          { name: 'About', x: centerX - 400, y: centerY },
-          { name: 'Contact', x: centerX + 400, y: centerY },
-          { name: 'Services', x: centerX, y: centerY - 300 },
-        ]
-        defaultPages.forEach((page) => {
-          level1Nodes.push({
-            id: nodeId.toString(),
-            name: page.name,
-            description: `${page.name} page`,
-            x: page.x,
-            y: page.y,
-            level: 1,
-            parentId: '1',
-          })
-          generatedConnections.push({ from: '1', to: nodeId.toString() })
-          nodeId++
-        })
-        generatedPages.push(...level1Nodes)
-      }
-    }
+      .filter(Boolean) as Array<{ id: string; d: string; from: PositionedNode; to: PositionedNode }>
+  }, [flow.connections, nodeMap])
 
-    applyFlowSnapshot({ nodes: generatedPages, connections: generatedConnections }, 'generated')
+  const handleAddNode = () => {
+    setFlow(prev => {
+      const id = createNodeId()
+      const newNode: PositionedNode = {
+        id,
+        name: 'New Page',
+        description: 'Describe this step…',
+        level: 0,
+        x: CANVAS_PADDING,
+        y: CANVAS_PADDING,
+      }
+      setMode(prevMode => (prevMode === 'empty' ? 'manual' : prevMode))
+      return {
+        nodes: [...prev.nodes, newNode],
+        connections: prev.connections,
+      }
+    })
   }
 
-  const handleMouseDown = useCallback((e: React.MouseEvent, nodeId: string) => {
-    if (editingNode) return
-    
-    const node = nodes.find(n => n.id === nodeId)
-    if (!node) return
+  const handleReset = () => {
+    setFlow(createEmptyFlowState())
+    setMode('empty')
+    setSelectedNodes(new Set())
+    setLinkSource(null)
+  }
 
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const rawOffsetX = e.clientX - rect.left
-    const rawOffsetY = e.clientY - rect.top
-    const offsetX = rawOffsetX / zoom
-    const offsetY = rawOffsetY / zoom
+  const handleAutoLayout = () => {
+    setFlow(prev => applyLayout(prev, true))
+  }
 
-    setDraggingNode(nodeId)
-    setDragOffset({ x: offsetX, y: offsetY })
-    e.preventDefault()
-  }, [nodes, editingNode, zoom])
+  const handleExportJSON = () => {
+    if (!latestFlow.current || latestFlow.current.nodes.length === 0) return
+    exportSiteFlowAsJSON(latestFlow.current, 'site-flow')
+  }
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (isPanning && canvasRef.current) {
-      const deltaX = e.clientX - panStart.x
-      const deltaY = e.clientY - panStart.y
-      setPanOffset(prev => ({
-        x: prev.x + deltaX,
-        y: prev.y + deltaY
-      }))
-      setPanStart({ x: e.clientX, y: e.clientY })
-      return
+  const handleExportImage = async () => {
+    if (!canvasRef.current || !latestFlow.current || latestFlow.current.nodes.length === 0) return
+    if (isExporting) return
+    setIsExporting(true)
+    try {
+      await exportSiteFlowAsImage(canvasRef.current, 'site-flow')
+    } finally {
+      setIsExporting(false)
     }
+  }
 
-    if (!draggingNode || !dragOffset || !canvasRef.current) return
+  const handleGenerate = async () => {
+    const prompt = prdContent?.trim() || appDescription.trim()
+    if (!prompt || isGenerating) return
+    setIsGenerating(true)
+    try {
+      const aiFlow = await generateSiteFlowWithAI(prompt, Boolean(prdContent?.trim()))
+      const normalized = applyLayout(normalizeSiteFlow(aiFlow), true)
+      setFlow(normalized)
+      setMode('generated')
+      setSelectedNodes(new Set())
+      setLinkSource(null)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
+  const handleNodeMouseDown = (event: React.MouseEvent<HTMLDivElement>, node: PositionedNode) => {
+    event.preventDefault()
+    setDraggingId(node.id)
+    const rect = event.currentTarget.getBoundingClientRect()
+    dragOffsetRef.current = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    }
+  }
+
+  const handleCanvasMouseMove = useCallback((event: MouseEvent) => {
+    if (!draggingId || !canvasRef.current) return
     const canvasRect = canvasRef.current.getBoundingClientRect()
-    const newX = (e.clientX - canvasRect.left - panOffset.x) / zoom - dragOffset.x
-    const newY = (e.clientY - canvasRect.top - panOffset.y) / zoom - dragOffset.y
+    const nextX = event.clientX - canvasRect.left - dragOffsetRef.current.x
+    const nextY = event.clientY - canvasRect.top - dragOffsetRef.current.y
+    setFlow(prev => ({
+      ...prev,
+      nodes: prev.nodes.map(node =>
+        node.id === draggingId
+          ? {
+            ...node,
+            x: Math.max(32, nextX),
+            y: Math.max(32, nextY),
+          }
+          : node
+      ),
+    }))
+  }, [draggingId])
 
-    setNodes(prev => prev.map(node =>
-      node.id === draggingNode
-        ? { ...node, x: Math.max(0, newX), y: Math.max(0, newY) }
-        : node
-    ))
-  }, [draggingNode, dragOffset, zoom, isPanning, panStart, panOffset])
-
-  const handleMouseUp = useCallback(() => {
-    setDraggingNode(null)
-    setDragOffset(null)
-    setIsPanning(false)
+  const handleCanvasMouseUp = useCallback(() => {
+    setDraggingId(null)
   }, [])
 
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
-      setIsPanning(true)
-      setPanStart({ x: e.clientX, y: e.clientY })
-      e.preventDefault()
-    }
-  }
-
   useEffect(() => {
-    if (draggingNode || isPanning) {
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-      return () => {
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-      }
+    if (!draggingId) return
+    window.addEventListener('mousemove', handleCanvasMouseMove)
+    window.addEventListener('mouseup', handleCanvasMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleCanvasMouseMove)
+      window.removeEventListener('mouseup', handleCanvasMouseUp)
     }
-  }, [draggingNode, isPanning, handleMouseMove, handleMouseUp])
+  }, [draggingId, handleCanvasMouseMove, handleCanvasMouseUp])
 
-  const handleNodeClick = (nodeId: string, e: React.MouseEvent) => {
-    if (draggingNode || editingNode) return
-    
-    if (connectingFrom) {
-      // If connectingFrom is 'connecting', set it to the clicked node (source)
-      if (connectingFrom === 'connecting') {
-        setConnectingFrom(nodeId)
-        return
-      }
-      
-      // Otherwise, connectingFrom is a node ID, so create connection
-      if (connectingFrom !== nodeId) {
-        // Create connection
-        const connectionExists = connections.some(
-          c => (c.from === connectingFrom && c.to === nodeId) || (c.from === nodeId && c.to === connectingFrom)
-        )
-        if (!connectionExists) {
-          setConnections(prev => [...prev, { from: connectingFrom, to: nodeId }])
-          setNodes(prev => prev.map(node => node.id === nodeId ? { ...node, parentId: connectingFrom } : node))
-          setFlowMode('custom')
-          saveToHistory()
-        }
-      }
-      setConnectingFrom(null)
-      return
-    }
-    
-    if (e.detail === 2) {
-      // Double click to edit
-      const node = nodes.find(n => n.id === nodeId)
-      if (node) {
-        setEditingNode(nodeId)
-        setEditingField('name')
-        setEditValue(node.name)
-      }
-      return
-    }
-    
-    if (e.shiftKey) {
-      setSelectedNodes(prev => {
-        const newSet = new Set(prev)
-        if (newSet.has(nodeId)) {
-          newSet.delete(nodeId)
-        } else {
-          newSet.add(nodeId)
-        }
-        return newSet
-      })
-    } else {
-      setSelectedNodes(new Set([nodeId]))
-    }
-  }
-
-  const handleContextMenu = (e: React.MouseEvent, nodeId?: string) => {
-    e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, nodeId })
-  }
-
-  const handleEditSave = () => {
-    if (!editingNode || !editingField) return
-    
-    setNodes(prev => prev.map(node =>
-      node.id === editingNode
-        ? editingField === 'name'
-          ? { ...node, name: editValue }
-          : { ...node, description: editValue }
-        : node
-    ))
-    setEditingNode(null)
-    setEditingField(null)
-    setEditValue('')
-    saveToHistory()
-  }
-
-  const handleEditCancel = () => {
-    setEditingNode(null)
-    setEditingField(null)
-    setEditValue('')
-  }
-
-  const deleteNode = (nodeId: string) => {
-    setNodes(prev => prev
-      .filter(n => n.id !== nodeId)
-      .map(n => n.parentId === nodeId ? { ...n, parentId: undefined } : n)
-    )
-    setConnections(prev => prev.filter(c => c.from !== nodeId && c.to !== nodeId))
-    setSelectedNodes(prev => {
-      const newSet = new Set(prev)
-      newSet.delete(nodeId)
-      return newSet
-    })
-    setContextMenu(null)
-    setFlowMode(prev => {
-      if (prev === 'idle') return 'idle'
-      return 'custom'
-    })
-    saveToHistory()
-  }
-
-  const addNewNode = (x: number, y: number) => {
-    const newNode: Node = {
-      id: Date.now().toString(),
-      name: 'New Page',
-      description: 'Page description',
-      x: (x - panOffset.x) / zoom,
-      y: (y - panOffset.y) / zoom,
-    }
-    setNodes(prev => [...prev, newNode])
-    setFlowMode(prev => {
-      if (prev === 'idle') return 'custom'
-      return prev
-    })
-    setContextMenu(null)
-    saveToHistory()
-  }
-
-  const addChildPage = (parentId: string) => {
-    const parent = nodes.find(n => n.id === parentId)
-    if (!parent) return
-    
-    const newNode: Node = {
-      id: Date.now().toString(),
-      name: 'Child Page',
-      description: 'Child page description',
-      x: parent.x + 200,
-      y: parent.y + 150,
-      parentId,
-    }
-    setNodes(prev => [...prev, newNode])
-    setConnections(prev => [...prev, { from: parentId, to: newNode.id }])
-    setFlowMode('custom')
-    setContextMenu(null)
-    saveToHistory()
-  }
-
-  const handleZoom = (delta: number) => {
-    setZoom(prev => {
-      const next = Math.max(0.3, Math.min(1.5, prev + delta))
-      return parseFloat(next.toFixed(2))
-    })
-  }
-
-  const centerView = useCallback(() => {
-    if (!canvasRef.current) return
-
-    const rect = canvasRef.current.getBoundingClientRect()
-    const canvasWidth = rect.width
-    const canvasHeight = rect.height
-
-    const availableWidth = Math.max(canvasWidth / TARGET_ZOOM - CANVAS_PADDING * 2, HORIZONTAL_SPACING)
-    const availableHeight = Math.max(canvasHeight / TARGET_ZOOM - CANVAS_PADDING * 2, LEAF_VERTICAL_SPACING)
-
-    setNodes(prevNodes => {
-      if (prevNodes.length === 0) {
-        return prevNodes
-      }
-
-      const nodesById = new Map<string, Node>(prevNodes.map(node => [String(node.id), node]))
-      const childMap = new Map<string, string[]>()
-      const incomingCount = new Map<string, number>()
-
-      connections.forEach(({ from, to }) => {
-        const fromId = String(from)
-        const toId = String(to)
-        if (!nodesById.has(fromId) || !nodesById.has(toId)) {
-          return
-        }
-        if (!childMap.has(fromId)) {
-          childMap.set(fromId, [])
-        }
-        childMap.get(fromId)!.push(toId)
-        incomingCount.set(toId, (incomingCount.get(toId) ?? 0) + 1)
-      })
-
-      let roots = prevNodes.filter(node => {
-        const nodeId = String(node.id)
-        return (node.level ?? 0) === 0 || (incomingCount.get(nodeId) ?? 0) === 0
-      })
-
-      if (roots.length === 0) {
-        roots = [prevNodes[0]]
-      }
-
-      roots.sort((a, b) => (a.y ?? 0) - (b.y ?? 0))
-
-      const levelMap = new Map<string, number>()
-      const queue: Array<{ id: string; depth: number }> = roots.map(root => ({
-        id: String(root.id),
-        depth: root.level ?? 0,
-      }))
-
-      queue.forEach(({ id, depth }) => levelMap.set(id, depth))
-
-      while (queue.length > 0) {
-        const { id, depth } = queue.shift()!
-        const children = childMap.get(id) ?? []
-        children.forEach(childId => {
-          if (!nodesById.has(childId)) return
-          const nextDepth = depth + 1
-          const recorded = levelMap.get(childId)
-          if (recorded === undefined || nextDepth > recorded) {
-            levelMap.set(childId, nextDepth)
-            queue.push({ id: childId, depth: nextDepth })
+  const handleNodeClick = (nodeId: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    if (linkSource) {
+      if (linkSource !== nodeId) {
+        setFlow(prev => {
+          const exists = prev.connections.some(
+            connection => connection.from === linkSource && connection.to === nodeId
+          )
+          if (exists) return prev
+          return {
+            ...prev,
+            connections: [...prev.connections, { from: linkSource, to: nodeId }],
           }
         })
       }
-
-      prevNodes.forEach(node => {
-        const id = String(node.id)
-        if (!levelMap.has(id)) {
-          levelMap.set(id, node.level ?? 0)
-        }
-      })
-
-      const depthValues = Array.from(levelMap.values())
-      const maxDepth = depthValues.length > 0 ? Math.max(...depthValues) : 0
-      const columnWidth = Math.max(
-        HORIZONTAL_SPACING,
-        maxDepth > 0 ? availableWidth / Math.max(maxDepth, 1) : HORIZONTAL_SPACING
-      )
-
-      const visited = new Set<string>()
-      const positions = new Map<string, { x: number; y: number }>()
-      let nextLeafIndex = 0
-
-      const assignPositions = (id: string, fallbackDepth: number): number => {
-        if (visited.has(id)) {
-          const existing = positions.get(id)
-          return existing ? existing.y : nextLeafIndex * LEAF_VERTICAL_SPACING
-        }
-        visited.add(id)
-
-        const node = nodesById.get(id)
-        if (!node) {
-          const y = nextLeafIndex * LEAF_VERTICAL_SPACING
-          nextLeafIndex += 1
-          return y
-        }
-
-        const depth = levelMap.get(id) ?? fallbackDepth
-        const children = (childMap.get(id) ?? []).filter(childId => nodesById.has(childId))
-
-        const x = CANVAS_PADDING + depth * columnWidth
-
-        if (children.length === 0) {
-          const y = nextLeafIndex * LEAF_VERTICAL_SPACING
-          nextLeafIndex += 1
-          positions.set(id, { x, y })
-          return y
-        }
-
-        const childYs = children.map(childId => assignPositions(childId, depth + 1))
-        const minY = Math.min(...childYs)
-        const maxY = Math.max(...childYs)
-        const y = (minY + maxY) / 2
-        positions.set(id, { x, y })
-        return y
-      }
-
-      roots.forEach(root => {
-        assignPositions(String(root.id), levelMap.get(String(root.id)) ?? 0)
-      })
-
-      prevNodes.forEach(node => {
-        const id = String(node.id)
-        if (!visited.has(id)) {
-          assignPositions(id, levelMap.get(id) ?? 0)
-        }
-      })
-
-      const positionedNodes = prevNodes.map(node => {
-        const pos = positions.get(String(node.id))
-        if (!pos) return node
-        const depth = levelMap.get(String(node.id)) ?? (node.level ?? 0)
-        return {
-          ...node,
-          level: depth,
-          x: pos.x,
-          y: pos.y,
-        }
-      })
-
-      const yValues = positionedNodes.map(node => node.y)
-      const minY = yValues.length > 0 ? Math.min(...yValues) : 0
-      const maxY = yValues.length > 0 ? Math.max(...yValues) : 0
-      const totalHeight = maxY - minY + NODE_HEIGHT
-      const extraVerticalSpace = availableHeight - totalHeight
-      const verticalShift = extraVerticalSpace > 0
-        ? CANVAS_PADDING + extraVerticalSpace / 2 - minY
-        : CANVAS_PADDING - minY
-
-      const shiftedNodes = positionedNodes.map(node => ({
-        ...node,
-        y: node.y + verticalShift,
-      }))
-
-      const shiftedNodesById = new Map<string, Node>(shiftedNodes.map(node => [String(node.id), node]))
-
-      const maxNodeExtentX = Math.max(...shiftedNodes.map(node => node.x + NODE_WIDTH))
-      let maxConnectionExtentX = maxNodeExtentX
-
-      connections.forEach(connection => {
-        const fromNode = shiftedNodesById.get(String(connection.from))
-        const toNode = shiftedNodesById.get(String(connection.to))
-        if (!fromNode || !toNode) {
-          return
-        }
-
-        const isForward = fromNode.x <= toNode.x
-        const startX = isForward
-          ? fromNode.x + NODE_WIDTH + CONNECTION_START_GAP
-          : fromNode.x - CONNECTION_START_GAP
-        const endX = isForward
-          ? toNode.x - CONNECTION_END_GAP
-          : toNode.x + NODE_WIDTH + CONNECTION_END_GAP
-        const startY = fromNode.y + NODE_HEIGHT / 2
-        const endY = toNode.y + NODE_HEIGHT / 2
-
-        const horizontalDistance = Math.max(Math.abs(endX - startX), CONNECTION_MIN_HORIZONTAL_DISTANCE)
-        const verticalDistance = endY - startY
-        const midX = (startX + endX) / 2
-        const isShortLink = horizontalDistance < 200 && Math.abs(verticalDistance) < 140
-
-        if (isShortLink) {
-          const controlX = midX + CONNECTION_SHORT_LINK_OFFSET
-          maxConnectionExtentX = Math.max(maxConnectionExtentX, startX, endX, controlX)
-        } else {
-          const controlOffset = Math.max(horizontalDistance * 0.5, CONNECTION_CONTROL_MIN)
-          const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
-          const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
-          maxConnectionExtentX = Math.max(maxConnectionExtentX, startX, endX, controlX1, controlX2)
-        }
-      })
-
-      const maxShiftedY = Math.max(...shiftedNodes.map(node => node.y + NODE_HEIGHT))
-      const requiredWidth = maxConnectionExtentX + CANVAS_PADDING
-      const requiredHeight = maxShiftedY + CANVAS_PADDING
-
-      setWorkspaceSize(current => ({
-        width: Math.max(current.width, Math.ceil(requiredWidth)),
-        height: Math.max(current.height, Math.ceil(requiredHeight)),
-      }))
-
-      return shiftedNodes
-    })
-
-    setZoom(TARGET_ZOOM)
-    setPanOffset({ x: 0, y: 0 })
-  }, [connections])
-
-  // Track if we've auto-fitted for current node set
-  const lastNodeCount = useRef(0)
-  useEffect(() => {
-    // Only auto-fit when node count changes (new generation)
-    if (nodes.length > 0 && nodes.length !== lastNodeCount.current) {
-      lastNodeCount.current = nodes.length
-      setTimeout(() => {
-        centerView()
-      }, 300) // Wait a bit longer for canvas to be fully rendered
+      setLinkSource(null)
+      return
     }
-  }, [nodes.length, centerView])
 
-  if (nodes.length === 0) {
-    return (
-      <div className="text-center py-12 text-mid-grey">
-        <p className="mb-4 text-sm text-white">Start by loading the curated DocFlow map or generate one from your prompt.</p>
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <button
-            onClick={handleLoadBlueprint}
-            className="px-4 py-2 bg-dark-card border border-divider/60 text-sm text-white rounded-md hover:bg-dark-surface transition-all"
-          >
-            Load Blueprint
-          </button>
-          <button
-            onClick={handleGenerateFlowClick}
-            disabled={!canGenerateFlow || isGeneratingFlow}
-            className="px-4 py-2 bg-amber-gold/90 text-black rounded-md text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isGeneratingFlow ? 'Generating…' : 'Generate'}
-          </button>
-        </div>
-        <p className="mb-3 text-xs text-mid-grey/80 uppercase tracking-wide">Or sketch manually</p>
+    setSelectedNodes(prev => {
+      const next = new Set(prev)
+      if (event.metaKey || event.ctrlKey) {
+        if (next.has(nodeId)) {
+          next.delete(nodeId)
+        } else {
+          next.add(nodeId)
+        }
+      } else {
+        next.clear()
+        next.add(nodeId)
+      }
+      return next
+    })
+  }
+
+  const handleDeleteNode = (nodeId: string) => {
+    setFlow(prev => ({
+      nodes: prev.nodes.filter(node => node.id !== nodeId),
+      connections: prev.connections.filter(connection => connection.from !== nodeId && connection.to !== nodeId),
+    }))
+    setSelectedNodes(prev => {
+      const next = new Set(prev)
+      next.delete(nodeId)
+      return next
+    })
+    setMode(prev => (prev === 'empty' ? 'empty' : 'manual'))
+  }
+
+  const handleRenameNode = (nodeId: string, name: string, description: string) => {
+    setFlow(prev => ({
+      ...prev,
+      nodes: prev.nodes.map(node =>
+        node.id === nodeId
+          ? { ...node, name: name.trim() || node.name, description: description.trim() }
+          : node
+      ),
+    }))
+  }
+
+  const handleLinkStart = (nodeId: string) => {
+    setLinkSource(current => (current === nodeId ? null : nodeId))
+  }
+
+  const stats = useMemo(() => ({
+    nodes: flow.nodes.length,
+    connections: flow.connections.length,
+  }), [flow.nodes.length, flow.connections.length])
+
+  const renderToolbar = () => (
+    <div className="flex flex-wrap items-center justify-between gap-3 border border-divider/40 rounded-lg px-4 py-3 bg-dark-card/80">
+      <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={() => {
-            if (canvasRef.current) {
-              const rect = canvasRef.current.getBoundingClientRect()
-              addNewNode(rect.width / 2, rect.height / 2)
-            }
-          }}
-          className="px-4 py-2 bg-amber-gold/10 hover:bg-amber-gold/20 text-amber-gold rounded-md text-sm font-medium transition-all"
+          onClick={handleGenerate}
+          disabled={!prdContent && !appDescription.trim()}
+          className="px-3 py-1.5 text-xs rounded-md border border-divider/50 text-white hover:bg-dark-surface disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Add First Page
+          {isGenerating ? 'Generating…' : 'Generate'}
         </button>
+        <button
+          onClick={handleAddNode}
+          className="px-3 py-1.5 text-xs rounded-md border border-divider/50 text-white hover:bg-dark-surface"
+        >
+          Add Page
+        </button>
+        <button
+          onClick={handleAutoLayout}
+          className="px-3 py-1.5 text-xs rounded-md border border-divider/50 text-white hover:bg-dark-surface"
+        >
+          Auto Layout
+        </button>
+        <button
+          onClick={handleReset}
+          className="px-3 py-1.5 text-xs rounded-md border border-divider/50 text-white hover:bg-dark-surface"
+        >
+          Reset
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-mid-grey">
+          Mode: <span className="text-white">{FLOW_MODE_LABEL[mode]}</span>
+        </span>
+        <button
+          onClick={handleExportJSON}
+          disabled={!flow.nodes.length}
+          className="px-3 py-1.5 text-xs rounded-md border border-divider/50 text-white hover:bg-dark-surface disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Export JSON
+        </button>
+        <button
+          onClick={handleExportImage}
+          disabled={!flow.nodes.length || isExporting}
+          className="px-3 py-1.5 text-xs rounded-md border border-divider/50 text-white hover:bg-dark-surface disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isExporting ? 'Exporting…' : 'Export Image'}
+        </button>
+      </div>
+    </div>
+  )
+
+  if (!flow.nodes.length) {
+    return (
+      <div className="space-y-6">
+        {renderToolbar()}
+        <div className="text-center py-16 rounded-xl border border-dashed border-divider/50 bg-dark-card/40">
+          <p className="text-white mb-4 text-base">Start your site flow</p>
+          <p className="text-sm text-mid-grey mb-6">
+            Generate from your prompt or sketch it manually. You can always auto-layout later.
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={handleGenerate}
+              disabled={!prdContent && !appDescription.trim()}
+              className="px-4 py-2 bg-white text-black text-sm font-semibold rounded-md disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? 'Generating…' : 'Generate'}
+            </button>
+            <button
+              onClick={handleAddNode}
+              className="px-4 py-2 border border-divider/50 text-sm text-white rounded-md hover:bg-dark-surface"
+            >
+              Add first page
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col relative" style={{ height: '80vh' }}>
-      {/* Simple Toolbar */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setConnectingFrom(connectingFrom ? null : 'connecting')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-              connectingFrom
-                ? 'bg-amber-gold text-white'
-                : 'bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface'
-            }`}
-          >
-            {connectingFrom ? 'Cancel' : 'Connect'}
-          </button>
-          <button
-            onClick={centerView}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
-          >
-            Center
-          </button>
-          <button
-            onClick={handleLoadBlueprint}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
-          >
-            Blueprint
-          </button>
-          <button
-            onClick={handleResetFlow}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
-          >
-            Reset
-          </button>
-          <button
-            onClick={handleGenerateFlowClick}
-            disabled={!canGenerateFlow || isGeneratingFlow}
-            className="px-3 py-1.5 text-xs font-medium rounded-md transition-all border border-divider/50 text-charcoal hover:bg-dark-surface disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isGeneratingFlow ? 'Generating…' : 'Generate'}
-          </button>
-        </div>
-        <div className="hidden md:flex items-center">
-          <span className="px-3 py-1 text-[11px] uppercase tracking-wide text-mid-grey border border-divider/40 rounded-full">
-            Mode: <span className="text-white ml-1">{FLOW_MODE_LABEL[flowMode]}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportJSON}
-            disabled={!latestSiteFlowRef.current || latestSiteFlowRef.current.nodes.length === 0}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Export JSON
-          </button>
-          <button
-            onClick={handleExportImage}
-            disabled={
-              isExportingImage ||
-              !latestSiteFlowRef.current ||
-              latestSiteFlowRef.current.nodes.length === 0
-            }
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isExportingImage ? 'Exporting…' : 'Export Image'}
-          </button>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleZoom(-0.1)}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
-          >
-            −
-          </button>
-          <span className="text-xs text-mid-grey min-w-[3rem] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={() => handleZoom(0.1)}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
-          >
-            +
-          </button>
-        </div>
+    <div className="space-y-4">
+      {renderToolbar()}
+
+      <div className="flex items-center gap-4 text-xs text-mid-grey uppercase tracking-wide bg-dark-card/50 rounded-lg px-4 py-2 border border-divider/40">
+        <span>{stats.nodes} pages</span>
+        <span>•</span>
+        <span>{stats.connections} connections</span>
+        {linkSource && (
+          <>
+            <span>•</span>
+            <span className="text-amber-gold">Select a target to link with {nodeMap.get(linkSource)?.name}</span>
+          </>
+        )}
       </div>
 
-      {/* Canvas */}
       <div
         ref={canvasRef}
-        className="flex-1 relative rounded-lg border border-divider/50 overflow-auto"
-        style={{
-          width: '100%',
-          height: '100%',
-          backgroundImage: `
-            linear-gradient(to right, #2A2A2A 1px, transparent 1px),
-            linear-gradient(to bottom, #2A2A2A 1px, transparent 1px)
-          `,
-          backgroundSize: '20px 20px',
-          backgroundColor: '#121212',
-          cursor: isPanning ? 'grabbing' : connectingFrom ? 'crosshair' : 'default'
-        }}
-        onMouseDown={handleCanvasMouseDown}
-        onClick={(e) => {
-          if (!contextMenu && !connectingFrom && e.target === e.currentTarget) {
-            setSelectedNodes(new Set())
-          }
-        }}
-        onContextMenu={(e) => {
-          if (e.target === e.currentTarget) {
-            handleContextMenu(e)
-          }
+        className="relative border border-divider/40 rounded-lg overflow-hidden bg-[#0E0E0E]"
+        style={{ height: '70vh' }}
+        onClick={() => {
+          setSelectedNodes(new Set())
+          setLinkSource(null)
         }}
       >
-        <div
-          ref={canvasContainerRef}
-          className="relative"
-          style={{ width: workspaceSize.width, height: workspaceSize.height }}
-            >
-          <div
-            style={{
-              transform: `scale(${zoom})`,
-              transformOrigin: '0 0',
-              position: 'relative',
-              width: workspaceSize.width,
-              height: workspaceSize.height,
-            }}
-          >
-            <svg
-              className="absolute inset-0 pointer-events-none"
-              width={workspaceSize.width}
-              height={workspaceSize.height}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: workspaceSize.width,
-                height: workspaceSize.height,
-                zIndex: 0,
-              }}
-            >
-              <defs>
-                <linearGradient id="siteflow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#3ECF8E" />
-                  <stop offset="50%" stopColor="#4E46E5" />
-                  <stop offset="100%" stopColor="#3ECF8E" />
-                </linearGradient>
-                <marker
-                  id="siteflow-arrow"
-                  markerWidth="12"
-                  markerHeight="12"
-                  refX="9"
-                  refY="6"
-                  orient="auto-start-reverse"
-                  markerUnits="strokeWidth"
+        <svg className="absolute inset-0 w-full h-full pointer-events-none">
+          <defs>
+            <linearGradient id="siteflow-line" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#3ECF8E" />
+              <stop offset="50%" stopColor="#4E46E5" />
+              <stop offset="100%" stopColor="#D9A441" />
+            </linearGradient>
+          </defs>
+          <g>
+            {connectionsToRender.map(connection => (
+              <path
+                key={connection.id}
+                d={connection.d}
+                fill="none"
+                stroke="url(#siteflow-line)"
+                strokeWidth={2.4}
+                opacity={selectedNodes.has(connection.from.id) || selectedNodes.has(connection.to.id) ? 1 : 0.85}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
+          </g>
+        </svg>
+
+        <div className="absolute inset-0">
+          {flow.nodes.map(node => {
+            const isSelected = selectedNodes.has(node.id)
+            return (
+              <div
+                key={node.id}
+                className={`absolute w-[260px] cursor-grab active:cursor-grabbing transition-transform ${
+                  isSelected ? 'z-30' : 'z-10'
+                }`}
+                style={{ left: node.x, top: node.y }}
+                onMouseDown={event => handleNodeMouseDown(event, node as PositionedNode)}
+                onClick={event => handleNodeClick(node.id, event)}
+              >
+                <div
+                  className={`rounded-xl border bg-dark-card/90 px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition-colors ${
+                    isSelected ? 'border-amber-gold' : 'border-divider/40'
+                  }`}
                 >
-                  <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
-                </marker>
-                <marker
-                  id="siteflow-arrow-start"
-                  markerWidth="12"
-                  markerHeight="12"
-                  refX="3"
-                  refY="6"
-                  orient="auto-start-reverse"
-                  markerUnits="strokeWidth"
-                >
-                  <path d="M0,0 L12,6 L0,12 z" fill="#fbbf24" />
-                </marker>
-                <marker
-                  id="siteflow-arrow-gradient"
-                  markerWidth="12"
-                  markerHeight="12"
-                  refX="9"
-                  refY="6"
-                  orient="auto-start-reverse"
-                  markerUnits="strokeWidth"
-                >
-                  <path d="M0,0 L12,6 L0,12 z" fill="url(#siteflow-gradient)" />
-                </marker>
-                <marker
-                  id="siteflow-arrow-start-gradient"
-                  markerWidth="12"
-                  markerHeight="12"
-                  refX="3"
-                  refY="6"
-                  orient="auto-start-reverse"
-                  markerUnits="strokeWidth"
-                >
-                  <path d="M0,0 L12,6 L0,12 z" fill="url(#siteflow-gradient)" />
-                </marker>
-                <filter id="siteflow-glow" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
-                  <feMerge>
-                    <feMergeNode in="coloredBlur" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              {renderedConnections.map((connection, index) => {
-                const fromNode = nodes.find(node => node.id === connection.from)
-                const toNode = nodes.find(node => node.id === connection.to)
-
-                if (!fromNode || !toNode) return null
-
-                const isForward = fromNode.x <= toNode.x
-                const startX = isForward
-                  ? fromNode.x + NODE_WIDTH + CONNECTION_START_GAP
-                  : fromNode.x - CONNECTION_START_GAP
-                const startY = fromNode.y + NODE_HEIGHT / 2
-                const endX = isForward
-                  ? toNode.x - CONNECTION_END_GAP
-                  : toNode.x + NODE_WIDTH + CONNECTION_END_GAP
-                const endY = toNode.y + NODE_HEIGHT / 2
-
-                const horizontalDistance = Math.max(Math.abs(endX - startX), CONNECTION_MIN_HORIZONTAL_DISTANCE)
-                const verticalDistance = endY - startY
-                const midX = (startX + endX) / 2
-                const midY = (startY + endY) / 2
-                const controlOffset = Math.max(horizontalDistance * 0.5, CONNECTION_CONTROL_MIN)
-
-                const controlX1 = isForward ? startX + controlOffset : startX - controlOffset
-                const controlX2 = isForward ? endX - controlOffset : endX + controlOffset
-                const controlY1 = startY + verticalDistance * 0.25
-                const controlY2 = endY - verticalDistance * 0.25
-
-                const isShortLink = horizontalDistance < 200 && Math.abs(verticalDistance) < 140
-                const pathD = isShortLink
-                  ? `M ${startX} ${startY} Q ${midX + CONNECTION_SHORT_LINK_OFFSET} ${midY} ${endX} ${endY}`
-                  : `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`
-
-                const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
-                const animationDuration = isActive ? '4s' : '8s'
-                const dashPattern = isActive ? '12 6' : '6 4'
-                const strokeWidth = isActive ? CONNECTION_STROKE_WIDTH_ACTIVE : CONNECTION_STROKE_WIDTH
-
-                return (
-                  <path
-                    key={`${connection.from}-${connection.to}-${index}`}
-                    d={pathD}
-                    stroke="url(#siteflow-gradient)"
-                    strokeWidth={strokeWidth}
-                    vectorEffect="non-scaling-stroke"
-                    shapeRendering="geometricPrecision"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray={dashPattern}
-                    style={{ animation: `siteflowSupabaseDash ${animationDuration} linear infinite`, filter: isActive ? 'url(#siteflow-glow)' : 'none' }}
-                    markerStart={isActive ? 'url(#siteflow-arrow-start)' : 'url(#siteflow-arrow-start-gradient)'}
-                    markerEnd={isActive ? 'url(#siteflow-arrow)' : 'url(#siteflow-arrow-gradient)'}
-                    opacity={isActive ? 1 : 0.92}
-                  />
-                )
-              })}
-            </svg>
-            {filteredNodes.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-sm text-mid-grey">No nodes to display</p>
-              </div>
-            ) : (
-              filteredNodes.map(node => {
-                const isHighlighted = searchQuery && (
-                  node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  (node.description ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                const isSelected = selectedNodes.has(node.id)
-                const isEditing = editingNode === node.id
-
-                return (
-                  <div
-                    key={node.id}
-                    className={`absolute cursor-move transition-transform duration-150 ${isSelected ? 'z-30' : 'z-10'} ${draggingNode === node.id ? 'opacity-80' : ''}`}
-                    style={{ left: `${node.x}px`, top: `${node.y}px` }}
-                    onMouseDown={e => {
-                      if (!connectingFrom) {
-                        handleMouseDown(e, node.id)
-                      }
-                    }}
-                    onClick={e => {
-                      e.stopPropagation()
-                      handleNodeClick(node.id, e)
-                    }}
-                    onDoubleClick={e => {
-                      e.stopPropagation()
-                      handleNodeClick(node.id, e)
-                    }}
-                    onContextMenu={e => handleContextMenu(e, node.id)}
-                  >
-                    <div
-                      className={`w-[260px] rounded-xl border border-divider/50 bg-dark-card px-4 py-3 shadow-[0_20px_40px_rgba(0,0,0,0.35)] transition-all ${
-                        isSelected ? 'ring-2 ring-amber-gold ring-offset-2 ring-offset-[#121212]' : ''
-                      } ${isHighlighted ? 'border-amber-gold/60' : ''}`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="space-y-1">
-                          <p className="text-xs uppercase tracking-wide text-mid-grey/70">
-                            {node.level === 0 ? 'Root' : `Level ${node.level ?? 0}`}
-                          </p>
-                          <h3 className="text-sm font-semibold text-white line-clamp-2">
-                            {node.name || 'Untitled Page'}
-                          </h3>
-                        </div>
-                        <button
-                          className="shrink-0 rounded-full border border-divider/40 bg-dark-surface px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-mid-grey hover:border-amber-gold/60 hover:text-amber-gold"
-                          onClick={e => {
-                            e.stopPropagation()
-                            setConnectingFrom(prev => (prev === node.id ? null : node.id))
-                          }}
-                        >
-                          Link
-                        </button>
-                      </div>
-                      <p className="mt-3 text-xs leading-relaxed text-mid-grey line-clamp-4">
-                        {node.description || 'Click to add details for this page.'}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-mid-grey/70">
+                        Level {node.level ?? 0}
                       </p>
-                      <div className="mt-4 flex items-center justify-between text-[11px] text-mid-grey/80">
-                        <span>{connections.filter(c => c.from === node.id).length} outgoing • {connections.filter(c => c.to === node.id).length} incoming</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            className="rounded-md bg-dark-surface px-2 py-1 text-[11px] font-medium text-mid-grey hover:text-white"
-                            onClick={e => {
-                              e.stopPropagation()
-                              setEditingNode(node.id)
-                              setEditingField('name')
-                              setEditValue(node.name)
-                            }}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            className="rounded-md bg-dark-surface px-2 py-1 text-[11px] font-medium text-mid-grey hover:text-amber-gold"
-                            onClick={e => {
-                              e.stopPropagation()
-                              addChildPage(node.id)
-                            }}
-                          >
-                            Add child
-                          </button>
-                        </div>
-                      </div>
+                      <h3 className="text-sm text-white font-semibold line-clamp-2">{node.name}</h3>
                     </div>
-                    {isEditing && (
-                      <div className="absolute inset-0 rounded-xl border-2 border-amber-gold/60" />
-                    )}
+                    <div className="flex flex-col gap-1">
+                      <button
+                        className="text-[10px] px-2 py-0.5 rounded-md border border-divider/40 text-mid-grey hover:text-white"
+                        onClick={event => {
+                          event.stopPropagation()
+                          const newName = prompt('Rename page', node.name) ?? node.name
+                          const descriptionPrompt = prompt('Update description', node.description || '')
+                          const newDescription = descriptionPrompt ?? (node.description || '')
+                          handleRenameNode(node.id, newName, newDescription)
+                        }}
+                      >
+                        Rename
+                      </button>
+                      <button
+                        className="text-[10px] px-2 py-0.5 rounded-md border border-divider/40 text-mid-grey hover:text-white"
+                        onClick={event => {
+                          event.stopPropagation()
+                          handleLinkStart(node.id)
+                        }}
+                      >
+                        {linkSource === node.id ? 'Cancel' : 'Link'}
+                      </button>
+                    </div>
                   </div>
-                )
-              })
-            )}
-          </div>
+                  <p className="text-[12px] text-mid-grey mt-3 line-clamp-3">
+                    {node.description || 'Add more context to this step.'}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between text-[11px] text-mid-grey">
+                    <span>
+                      {flow.connections.filter(connection => connection.from === node.id).length} out •{' '}
+                      {flow.connections.filter(connection => connection.to === node.id).length} in
+                    </span>
+                    <button
+                      className="text-red-400 hover:text-red-300"
+                      onClick={event => {
+                        event.stopPropagation()
+                        handleDeleteNode(node.id)
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
-      </div>
-      {contextMenu && (
-        <div
-          className="fixed z-50 w-48 rounded-lg border border-divider/40 bg-dark-card p-2 text-sm text-white shadow-xl"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-dark-surface"
-            onClick={() => {
-              if (contextMenu.nodeId) {
-                addChildPage(contextMenu.nodeId)
-              } else if (canvasRef.current) {
-                const rect = canvasRef.current.getBoundingClientRect()
-                addNewNode(rect.width / 2, rect.height / 2)
-              }
-              setContextMenu(null)
-            }}
-          >
-            + Add child page
-          </button>
-          {contextMenu.nodeId && (
-            <>
-              <button
-                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-dark-surface"
-                onClick={() => {
-                  const node = nodes.find(n => n.id === contextMenu.nodeId)
-                  if (node) {
-                    setEditingNode(node.id)
-                    setEditingField('name')
-                    setEditValue(node.name)
-                  }
-                  setContextMenu(null)
-                }}
-              >
-                ✏️ Rename
-              </button>
-              <button
-                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-red-400 hover:bg-red-500/10"
-                onClick={() => {
-                  deleteNode(contextMenu.nodeId!)
-                }}
-              >
-                🗑 Delete
-              </button>
-            </>
-          )}
-        </div>
-      )}
-      {editingNode && editingField && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-divider/40 bg-dark-card p-6 text-white shadow-2xl">
-            <h3 className="mb-4 text-base font-semibold">
-              {editingField === 'name' ? 'Rename page' : 'Edit description'}
-            </h3>
-            {editingField === 'name' ? (
-              <input
-                ref={handleEditRef}
-                className="w-full rounded-lg border border-divider/40 bg-dark-surface px-3 py-2 text-sm text-white focus:border-amber-gold focus:outline-none"
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-              />
-            ) : (
-              <textarea
-                ref={handleEditRef}
-                className="w-full rounded-lg border border-divider/40 bg-dark-surface px-3 py-2 text-sm text-white focus:border-amber-gold focus:outline-none"
-                rows={4}
-                value={editValue}
-                onChange={e => setEditValue(e.target.value)}
-              />
-            )}
-            <div className="mt-6 flex items-center justify-end gap-3 text-sm">
-              <button
-                className="rounded-md px-4 py-2 text-mid-grey hover:text-white"
-                onClick={handleEditCancel}
-              >
-                Cancel
-              </button>
-              <button
-                className="rounded-md bg-amber-gold px-4 py-2 font-semibold text-black hover:bg-amber-gold/90"
-                onClick={handleEditSave}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="pointer-events-none mt-3 flex items-center justify-center text-[11px] uppercase tracking-wide text-mid-grey/70">
-        <span>Drag nodes to rearrange • Shift+Click to multi-select • Right-click for options</span>
       </div>
     </div>
   )
 })
 
+SiteFlowVisualizer.displayName = 'SiteFlowVisualizer'
+
 export default SiteFlowVisualizer
+
