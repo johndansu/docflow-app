@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
 import { type SiteFlowData, exportSiteFlowAsImage, exportSiteFlowAsJSON } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
+import siteFlowBlueprint from '../../../site-flow.json' assert { type: 'json' }
 
 interface Node {
   id: string
@@ -181,14 +182,28 @@ const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
   }
 }
 
+const STATIC_BLUEPRINT = normalizeSiteFlowData(siteFlowBlueprint as SiteFlowData)
+
+const cloneSiteFlowData = (data: SiteFlowData): SiteFlowData => ({
+  nodes: data.nodes.map(node => ({ ...node })),
+  connections: data.connections.map(connection => ({ ...connection })),
+})
+
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
   prdContent,
   onSiteFlowChange,
   initialSiteFlow,
 }, ref) => {
-  const [nodes, setNodes] = useState<Node[]>(initialSiteFlow?.nodes || [])
-  const [connections, setConnections] = useState<Connection[]>(initialSiteFlow?.connections || [])
+  const initialNormalizedFlow = useMemo(() => {
+    if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
+      return normalizeSiteFlowData(initialSiteFlow)
+    }
+    return cloneSiteFlowData(STATIC_BLUEPRINT)
+  }, [initialSiteFlow])
+
+  const [nodes, setNodes] = useState<Node[]>(initialNormalizedFlow.nodes)
+  const [connections, setConnections] = useState<Connection[]>(initialNormalizedFlow.connections)
   const [selectedNodes, setSelectedNodes] = useState<Set<string>>(new Set())
   const [zoom, setZoom] = useState(0.3) // Default to 30% zoom
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
@@ -202,8 +217,9 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [draggingNode, setDraggingNode] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
-  const [history, setHistory] = useState<SiteFlowData[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [history, setHistory] = useState<SiteFlowData[]>([initialNormalizedFlow])
+  const [historyIndex, setHistoryIndex] = useState(0)
+  const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
   const [isExportingImage, setIsExportingImage] = useState(false)
   const searchQuery: string = ''
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -212,7 +228,11 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     editInputRef.current = element
   }
   const canvasContainerRef = useRef<HTMLDivElement>(null)
-  const latestSiteFlowRef = useRef<SiteFlowData | null>(initialSiteFlow ? initialSiteFlow : null)
+  const latestSiteFlowRef = useRef<SiteFlowData | null>(initialNormalizedFlow)
+  const canGenerateFlow = Boolean(
+    (prdContent && prdContent.trim().length > 0) ||
+    (appDescription && appDescription.trim().length > 0)
+  )
 
   const renderedConnections: RenderedConnection[] = useMemo(() => {
     const nodesById = new Map<string, Node>()
@@ -364,21 +384,14 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   }, [])
 
   useEffect(() => {
-    // If initial site flow is provided, use it and don't regenerate
-    if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
-      const normalizedFlow = normalizeSiteFlowData(initialSiteFlow)
-      setNodes(normalizedFlow.nodes)
-      setConnections(normalizedFlow.connections)
-      return
-    }
-    
-    // Otherwise, generate from PRD or description
-    if (prdContent && prdContent.trim()) {
-      generateFlowFromPRDAsync(prdContent)
-    } else if (appDescription && appDescription.trim()) {
-      generateFlowFromDescriptionAsync(appDescription)
-    }
-  }, [appDescription, prdContent, initialSiteFlow])
+    if (!initialSiteFlow || initialSiteFlow.nodes.length === 0) return
+    const normalizedFlow = normalizeSiteFlowData(initialSiteFlow)
+    setNodes(normalizedFlow.nodes)
+    setConnections(normalizedFlow.connections)
+    setHistory([normalizedFlow])
+    setHistoryIndex(0)
+    latestSiteFlowRef.current = normalizedFlow
+  }, [initialSiteFlow])
 
   // Notify parent when site flow changes
   useEffect(() => {
@@ -455,6 +468,37 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       setIsExportingImage(false)
     }
   }, [isExportingImage])
+
+  const loadBlueprint = () => {
+    const blueprintClone = cloneSiteFlowData(STATIC_BLUEPRINT)
+    setNodes(blueprintClone.nodes)
+    setConnections(blueprintClone.connections)
+    setHistory([blueprintClone])
+    setHistoryIndex(0)
+    setSelectedNodes(new Set())
+    setConnectingFrom(null)
+    setContextMenu(null)
+    latestSiteFlowRef.current = blueprintClone
+    setTimeout(() => centerView(), 150)
+  }
+
+  const handleGenerateFlowClick = async () => {
+    if (!canGenerateFlow || isGeneratingFlow) return
+    const trimmedPrd = prdContent?.trim()
+    const trimmedDescription = appDescription?.trim()
+    if (!trimmedPrd && !trimmedDescription) return
+
+    setIsGeneratingFlow(true)
+    try {
+      if (trimmedPrd) {
+        await generateFlowFromPRDAsync(trimmedPrd)
+      } else if (trimmedDescription) {
+        await generateFlowFromDescriptionAsync(trimmedDescription)
+      }
+    } finally {
+      setIsGeneratingFlow(false)
+    }
+  }
 
   const pasteNodes = (x: number, y: number) => {
     const clipboard = localStorage.getItem('siteflow-clipboard')
@@ -555,6 +599,9 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         const normalizedFlow = normalizeSiteFlowData(aiFlow)
         setNodes(normalizedFlow.nodes)
         setConnections(normalizedFlow.connections)
+        setSelectedNodes(new Set())
+        setConnectingFrom(null)
+        setContextMenu(null)
         // Save to history after state updates
         setTimeout(() => {
           const currentState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
@@ -590,6 +637,9 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         const normalizedFlow = normalizeSiteFlowData(aiFlow)
         setNodes(normalizedFlow.nodes)
         setConnections(normalizedFlow.connections)
+        setSelectedNodes(new Set())
+        setConnectingFrom(null)
+        setContextMenu(null)
         // Save to history after state updates
         setTimeout(() => {
           const currentState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
@@ -1339,6 +1389,19 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
           >
             Center
+          </button>
+          <button
+            onClick={loadBlueprint}
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
+          >
+            Blueprint
+          </button>
+          <button
+            onClick={handleGenerateFlowClick}
+            disabled={!canGenerateFlow || isGeneratingFlow}
+            className="px-3 py-1.5 text-xs font-medium rounded-md transition-all border border-divider/50 text-charcoal hover:bg-dark-surface disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isGeneratingFlow ? 'Generating…' : 'Generate'}
           </button>
         </div>
         <div className="flex items-center gap-2">
