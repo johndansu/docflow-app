@@ -31,16 +31,42 @@ const COLOR_PROPERTIES: Array<keyof CSSStyleDeclaration> = [
   'stroke',
 ]
 
+const getColorResolver = (doc: Document): CanvasRenderingContext2D | null => {
+  const canvas = doc.createElement('canvas')
+  canvas.width = 1
+  canvas.height = 1
+  return canvas.getContext('2d')
+}
+
+const resolveColorValue = (ctx: CanvasRenderingContext2D | null, value: string): string | undefined => {
+  if (!ctx) return value
+  if (!value) return value
+  const needsConversion = value.includes('oklab') || value.includes('color(') || value.includes('color-mix')
+  if (!needsConversion) {
+    return value
+  }
+  try {
+    ctx.fillStyle = value
+    return typeof ctx.fillStyle === 'string' ? ctx.fillStyle : value
+  } catch {
+    return undefined
+  }
+}
+
 const sanitizeColorsForExport = (doc: Document, rootElement: HTMLElement) => {
   const win = doc.defaultView
   if (!win) return
+  const colorResolver = getColorResolver(doc)
   const elements = [rootElement, ...Array.from(rootElement.querySelectorAll<HTMLElement>('*'))]
   elements.forEach((element) => {
     const computed = win.getComputedStyle(element)
     COLOR_PROPERTIES.forEach((prop) => {
       const value = computed[prop]
       if (typeof value === 'string' && value && value !== 'initial') {
-        element.style.setProperty(prop as string, value)
+        const resolved = resolveColorValue(colorResolver, value)
+        if (resolved) {
+          element.style.setProperty(prop as string, resolved)
+        }
       }
     })
     const backgroundImage = computed.backgroundImage
