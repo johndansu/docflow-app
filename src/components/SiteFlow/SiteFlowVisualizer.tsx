@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
 import { type SiteFlowData, exportSiteFlowAsImage, exportSiteFlowAsJSON } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
+import curatedSiteFlow from '../../data/siteFlowBlueprint'
 
 interface Node {
   id: string
@@ -19,6 +20,16 @@ interface Connection {
 }
 
 type RenderedConnection = Connection & { generated?: boolean }
+
+type FlowMode = 'idle' | 'blueprint' | 'generated' | 'imported' | 'custom'
+
+const FLOW_MODE_LABEL: Record<FlowMode, string> = {
+  idle: 'Idle',
+  blueprint: 'Blueprint',
+  generated: 'Generated',
+  imported: 'Imported',
+  custom: 'Custom',
+}
 
 interface SiteFlowVisualizerProps {
   appDescription?: string
@@ -181,6 +192,14 @@ const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
   }
 }
 
+const PREBUILT_BLUEPRINT = normalizeSiteFlowData(curatedSiteFlow)
+const EMPTY_FLOW: SiteFlowData = { nodes: [], connections: [] }
+
+const cloneSiteFlowData = (data: SiteFlowData): SiteFlowData => ({
+  nodes: data.nodes.map(node => ({ ...node })),
+  connections: data.connections.map(connection => ({ ...connection })),
+})
+
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
   prdContent,
@@ -191,7 +210,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
       return normalizeSiteFlowData(initialSiteFlow)
     }
-    return { nodes: [], connections: [] }
+    return EMPTY_FLOW
   }, [initialSiteFlow])
 
   const [nodes, setNodes] = useState<Node[]>(initialNormalizedFlow.nodes)
@@ -209,8 +228,13 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   const [draggingNode, setDraggingNode] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null)
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null)
-  const [history, setHistory] = useState<SiteFlowData[]>([initialNormalizedFlow])
-  const [historyIndex, setHistoryIndex] = useState(0)
+  const [history, setHistory] = useState<SiteFlowData[]>(
+    initialNormalizedFlow.nodes.length ? [initialNormalizedFlow] : []
+  )
+  const [historyIndex, setHistoryIndex] = useState(initialNormalizedFlow.nodes.length ? 0 : -1)
+  const [flowMode, setFlowMode] = useState<FlowMode>(
+    initialNormalizedFlow.nodes.length ? 'imported' : 'idle'
+  )
   const [isGeneratingFlow, setIsGeneratingFlow] = useState(false)
   const [isExportingImage, setIsExportingImage] = useState(false)
   const searchQuery: string = ''
@@ -220,11 +244,26 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     editInputRef.current = element
   }
   const canvasContainerRef = useRef<HTMLDivElement>(null)
-  const latestSiteFlowRef = useRef<SiteFlowData | null>(initialNormalizedFlow)
+  const latestSiteFlowRef = useRef<SiteFlowData | null>(
+    initialNormalizedFlow.nodes.length ? initialNormalizedFlow : null
+  )
   const canGenerateFlow = Boolean(
     (prdContent && prdContent.trim().length > 0) ||
     (appDescription && appDescription.trim().length > 0)
   )
+
+  const applyFlowSnapshot = useCallback((flow: SiteFlowData, mode: FlowMode) => {
+    const normalized = normalizeSiteFlowData(flow)
+    setNodes(normalized.nodes)
+    setConnections(normalized.connections)
+    setHistory([normalized])
+    setHistoryIndex(0)
+    setFlowMode(mode)
+    setSelectedNodes(new Set())
+    setConnectingFrom(null)
+    setContextMenu(null)
+    latestSiteFlowRef.current = normalized.nodes.length ? normalized : null
+  }, [])
 
   const renderedConnections: RenderedConnection[] = useMemo(() => {
     const nodesById = new Map<string, Node>()
@@ -335,31 +374,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     })
   }, [nodes, renderedConnections])
 
-  useEffect(() => {
-    if (nodes.length === 0) return
-
-    setConnections(prev => {
-      const existing = new Set(prev.map(conn => `${conn.from}->${conn.to}`))
-      const additions: Connection[] = []
-
-      nodes.forEach(node => {
-        if (!node.parentId) return
-        const parentExists = nodes.some(n => n.id === node.parentId)
-        if (!parentExists) return
-        const key = `${node.parentId}->${node.id}`
-        if (existing.has(key)) return
-        existing.add(key)
-        additions.push({ from: node.parentId, to: node.id })
-      })
-
-      if (additions.length === 0) {
-        return prev
-      }
-
-      return [...prev, ...additions]
-    })
-  }, [nodes])
-
   useImperativeHandle(ref, () => ({
     getCurrentSiteFlow: () => latestSiteFlowRef.current,
   }), [])
@@ -377,13 +391,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
   useEffect(() => {
     if (!initialSiteFlow || initialSiteFlow.nodes.length === 0) return
-    const normalizedFlow = normalizeSiteFlowData(initialSiteFlow)
-    setNodes(normalizedFlow.nodes)
-    setConnections(normalizedFlow.connections)
-    setHistory([normalizedFlow])
-    setHistoryIndex(0)
-    latestSiteFlowRef.current = normalizedFlow
-  }, [initialSiteFlow])
+    applyFlowSnapshot(initialSiteFlow, 'imported')
+  }, [initialSiteFlow, applyFlowSnapshot])
 
   // Notify parent when site flow changes
   useEffect(() => {
@@ -400,32 +409,35 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
 
   // Save to history
   const saveToHistory = useCallback(() => {
-    const currentState: SiteFlowData = { nodes, connections }
+    const snapshot: SiteFlowData = {
+      nodes: nodes.map(node => ({ ...node })),
+      connections: connections.map(connection => ({ ...connection })),
+    }
     setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1)
-      newHistory.push(currentState)
-      return newHistory.slice(-50) // Keep last 50 states
+      const base = historyIndex >= 0 ? prev.slice(0, historyIndex + 1) : []
+      base.push(snapshot)
+      return base.slice(-50)
     })
     setHistoryIndex(prev => Math.min(prev + 1, 49))
   }, [nodes, connections, historyIndex])
 
   // Undo/Redo
   const undo = () => {
-    if (historyIndex > 0) {
-      const prevState = history[historyIndex - 1]
-      setNodes(prevState.nodes)
-      setConnections(prevState.connections)
-      setHistoryIndex(prev => prev - 1)
-    }
+    if (historyIndex <= 0) return
+    const prevState = history[historyIndex - 1]
+    setNodes(prevState.nodes.map(node => ({ ...node })))
+    setConnections(prevState.connections.map(connection => ({ ...connection })))
+    setHistoryIndex(prev => prev - 1)
+    latestSiteFlowRef.current = prevState
   }
 
   const redo = () => {
-    if (historyIndex < history.length - 1) {
-      const nextState = history[historyIndex + 1]
-      setNodes(nextState.nodes)
-      setConnections(nextState.connections)
-      setHistoryIndex(prev => prev + 1)
-    }
+    if (historyIndex < 0 || historyIndex >= history.length - 1) return
+    const nextState = history[historyIndex + 1]
+    setNodes(nextState.nodes.map(node => ({ ...node })))
+    setConnections(nextState.connections.map(connection => ({ ...connection })))
+    setHistoryIndex(prev => prev + 1)
+    latestSiteFlowRef.current = nextState
   }
 
   // Copy/Paste
@@ -477,6 +489,22 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     } finally {
       setIsGeneratingFlow(false)
     }
+  }
+
+  const handleLoadBlueprint = () => {
+    applyFlowSnapshot(cloneSiteFlowData(PREBUILT_BLUEPRINT), 'blueprint')
+  }
+
+  const handleResetFlow = () => {
+    setNodes([])
+    setConnections([])
+    setSelectedNodes(new Set())
+    setConnectingFrom(null)
+    setContextMenu(null)
+    setHistory([])
+    setHistoryIndex(-1)
+    setFlowMode('idle')
+    latestSiteFlowRef.current = null
   }
 
   const pasteNodes = (x: number, y: number) => {
@@ -575,24 +603,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       console.log('🤖 Generating site flow from PRD with AI...')
       const aiFlow = await generateSiteFlowWithAI(prdContent, true)
       if (aiFlow.nodes.length > 0) {
-        const normalizedFlow = normalizeSiteFlowData(aiFlow)
-        setNodes(normalizedFlow.nodes)
-        setConnections(normalizedFlow.connections)
-        setSelectedNodes(new Set())
-        setConnectingFrom(null)
-        setContextMenu(null)
-        // Save to history after state updates
-        setTimeout(() => {
-          const currentState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
-          setHistory(prev => {
-            const newHistory = prev.slice(0, historyIndex + 1)
-            newHistory.push(currentState)
-            return newHistory.slice(-50)
-          })
-          setHistoryIndex(prev => Math.min(prev + 1, 49))
-          // Auto-fit after setting nodes
-          setTimeout(() => centerView(), 100)
-        }, 0)
+        applyFlowSnapshot(aiFlow, 'generated')
         return
       }
     } catch (error) {
@@ -613,24 +624,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       console.log('🤖 Generating site flow with AI...')
       const aiFlow = await generateSiteFlowWithAI(description, false)
       if (aiFlow.nodes.length > 0) {
-        const normalizedFlow = normalizeSiteFlowData(aiFlow)
-        setNodes(normalizedFlow.nodes)
-        setConnections(normalizedFlow.connections)
-        setSelectedNodes(new Set())
-        setConnectingFrom(null)
-        setContextMenu(null)
-        // Save to history after state updates
-        setTimeout(() => {
-          const currentState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
-          setHistory(prev => {
-            const newHistory = prev.slice(0, historyIndex + 1)
-            newHistory.push(currentState)
-            return newHistory.slice(-50)
-          })
-          setHistoryIndex(prev => Math.min(prev + 1, 49))
-          // Auto-fit after setting nodes
-          setTimeout(() => centerView(), 100)
-        }, 0)
+        applyFlowSnapshot(aiFlow, 'generated')
         return
       }
     } catch (error) {
@@ -895,19 +889,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       }
     }
 
-    const normalizedFlow = normalizeSiteFlowData({ nodes: generatedPages, connections: generatedConnections })
-    setNodes(normalizedFlow.nodes)
-    setConnections(normalizedFlow.connections)
-    
-    // Initialize history with generated flow
-    const initialState: SiteFlowData = { nodes: normalizedFlow.nodes, connections: normalizedFlow.connections }
-    setHistory([initialState])
-    setHistoryIndex(0)
-    
-    // Auto-fit and center view after a short delay to ensure canvas is rendered
-    setTimeout(() => {
-      centerView()
-    }, 200)
+    applyFlowSnapshot({ nodes: generatedPages, connections: generatedConnections }, 'generated')
   }
 
   const handleMouseDown = useCallback((e: React.MouseEvent, nodeId: string) => {
@@ -996,6 +978,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
         if (!connectionExists) {
           setConnections(prev => [...prev, { from: connectingFrom, to: nodeId }])
           setNodes(prev => prev.map(node => node.id === nodeId ? { ...node, parentId: connectingFrom } : node))
+          setFlowMode('custom')
           saveToHistory()
         }
       }
@@ -1068,6 +1051,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       return newSet
     })
     setContextMenu(null)
+    setFlowMode(prev => {
+      if (prev === 'idle') return 'idle'
+      return 'custom'
+    })
     saveToHistory()
   }
 
@@ -1080,6 +1067,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       y: (y - panOffset.y) / zoom,
     }
     setNodes(prev => [...prev, newNode])
+    setFlowMode(prev => {
+      if (prev === 'idle') return 'custom'
+      return prev
+    })
     setContextMenu(null)
     saveToHistory()
   }
@@ -1098,6 +1089,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     }
     setNodes(prev => [...prev, newNode])
     setConnections(prev => [...prev, { from: parentId, to: newNode.id }])
+    setFlowMode('custom')
     setContextMenu(null)
     saveToHistory()
   }
@@ -1332,7 +1324,23 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
   if (nodes.length === 0) {
     return (
       <div className="text-center py-12 text-mid-grey">
-        <p className="mb-4">Site flow will be generated automatically from your app description</p>
+        <p className="mb-4 text-sm text-white">Start by loading the curated DocFlow map or generate one from your prompt.</p>
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <button
+            onClick={handleLoadBlueprint}
+            className="px-4 py-2 bg-dark-card border border-divider/60 text-sm text-white rounded-md hover:bg-dark-surface transition-all"
+          >
+            Load Blueprint
+          </button>
+          <button
+            onClick={handleGenerateFlowClick}
+            disabled={!canGenerateFlow || isGeneratingFlow}
+            className="px-4 py-2 bg-amber-gold/90 text-black rounded-md text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isGeneratingFlow ? 'Generating…' : 'Generate'}
+          </button>
+        </div>
+        <p className="mb-3 text-xs text-mid-grey/80 uppercase tracking-wide">Or sketch manually</p>
         <button
           onClick={() => {
             if (canvasRef.current) {
@@ -1370,12 +1378,29 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             Center
           </button>
           <button
+            onClick={handleLoadBlueprint}
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
+          >
+            Blueprint
+          </button>
+          <button
+            onClick={handleResetFlow}
+            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
+          >
+            Reset
+          </button>
+          <button
             onClick={handleGenerateFlowClick}
             disabled={!canGenerateFlow || isGeneratingFlow}
             className="px-3 py-1.5 text-xs font-medium rounded-md transition-all border border-divider/50 text-charcoal hover:bg-dark-surface disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isGeneratingFlow ? 'Generating…' : 'Generate'}
           </button>
+        </div>
+        <div className="hidden md:flex items-center">
+          <span className="px-3 py-1 text-[11px] uppercase tracking-wide text-mid-grey border border-divider/40 rounded-full">
+            Mode: <span className="text-white ml-1">{FLOW_MODE_LABEL[flowMode]}</span>
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <button
