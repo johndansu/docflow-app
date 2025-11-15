@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle, useMemo } from 'react'
 import { type SiteFlowData, exportSiteFlowAsImage, exportSiteFlowAsJSON } from '../../utils/siteFlowUtils'
 import { generateSiteFlowWithAI } from '../../utils/siteFlowGenerator'
-import siteFlowBlueprint from '../../../site-flow.json' assert { type: 'json' }
 
 interface Node {
   id: string
@@ -182,13 +181,6 @@ const normalizeSiteFlowData = (data?: SiteFlowData | null): SiteFlowData => {
   }
 }
 
-const STATIC_BLUEPRINT = normalizeSiteFlowData(siteFlowBlueprint as SiteFlowData)
-
-const cloneSiteFlowData = (data: SiteFlowData): SiteFlowData => ({
-  nodes: data.nodes.map(node => ({ ...node })),
-  connections: data.connections.map(connection => ({ ...connection })),
-})
-
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
   prdContent,
@@ -199,7 +191,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
     if (initialSiteFlow && initialSiteFlow.nodes.length > 0) {
       return normalizeSiteFlowData(initialSiteFlow)
     }
-    return cloneSiteFlowData(STATIC_BLUEPRINT)
+    return { nodes: [], connections: [] }
   }, [initialSiteFlow])
 
   const [nodes, setNodes] = useState<Node[]>(initialNormalizedFlow.nodes)
@@ -468,19 +460,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
       setIsExportingImage(false)
     }
   }, [isExportingImage])
-
-  const loadBlueprint = () => {
-    const blueprintClone = cloneSiteFlowData(STATIC_BLUEPRINT)
-    setNodes(blueprintClone.nodes)
-    setConnections(blueprintClone.connections)
-    setHistory([blueprintClone])
-    setHistoryIndex(0)
-    setSelectedNodes(new Set())
-    setConnectingFrom(null)
-    setContextMenu(null)
-    latestSiteFlowRef.current = blueprintClone
-    setTimeout(() => centerView(), 150)
-  }
 
   const handleGenerateFlowClick = async () => {
     if (!canGenerateFlow || isGeneratingFlow) return
@@ -1389,12 +1368,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
             className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
           >
             Center
-          </button>
-          <button
-            onClick={loadBlueprint}
-            className="px-3 py-1.5 text-xs font-medium rounded-md bg-dark-card border border-divider/50 text-charcoal hover:bg-dark-surface transition-all"
-          >
-            Blueprint
           </button>
           <button
             onClick={handleGenerateFlowClick}
