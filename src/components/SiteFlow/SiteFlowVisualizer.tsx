@@ -42,6 +42,8 @@ const CONNECTION_END_GAP = 36
 const CONNECTION_MIN_HORIZONTAL_DISTANCE = 140
 const CONNECTION_CONTROL_MIN = 120
 const CONNECTION_SHORT_LINK_OFFSET = 90
+const CONNECTION_STROKE_WIDTH = 2.4
+const CONNECTION_STROKE_WIDTH_ACTIVE = 3.6
 
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(({
   appDescription = '',
@@ -1341,13 +1343,16 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>((
                 const isActive = selectedNodes.has(fromNode.id) || selectedNodes.has(toNode.id)
                 const animationDuration = isActive ? '4s' : '8s'
                 const dashPattern = isActive ? '12 6' : '6 4'
+                const strokeWidth = isActive ? CONNECTION_STROKE_WIDTH_ACTIVE : CONNECTION_STROKE_WIDTH
 
                 return (
                   <path
                     key={`${connection.from}-${connection.to}-${index}`}
                     d={pathD}
                     stroke="url(#siteflow-gradient)"
-                    strokeWidth={isActive ? 3 : 1.8}
+                    strokeWidth={strokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    shapeRendering="geometricPrecision"
                     fill="none"
                     strokeLinecap="round"
                     strokeLinejoin="round"
