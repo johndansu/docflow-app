@@ -48,10 +48,23 @@ const resolveColorValue = (ctx: CanvasRenderingContext2D | null, value: string):
   }
   try {
     ctx.fillStyle = value
-    return typeof ctx.fillStyle === 'string' ? ctx.fillStyle : value
+    if (typeof ctx.fillStyle === 'string') {
+      return ctx.fillStyle
+    }
   } catch {
-    return undefined
+    // Continue to fallback below
   }
+  // Fallback to forcing via color-mix removal
+  if (needsConversion) {
+    const fallback = value
+      .replace(/oklab\([^)]*\)/gi, '')
+      .replace(/color-mix\([^)]*\)/gi, '')
+      .replace(/color\([^)]*\)/gi, '')
+    if (fallback.trim()) {
+      return fallback
+    }
+  }
+  return undefined
 }
 
 const sanitizeColorsForExport = (doc: Document, rootElement: HTMLElement) => {
