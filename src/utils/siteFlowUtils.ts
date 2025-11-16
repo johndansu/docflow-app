@@ -1,160 +1,114 @@
-// Dynamic import for html2canvas to avoid SSR issues
+import type { SiteFlowData } from './storage'
 
-export interface SiteFlowData {
-  nodes: Array<{
-    id: string
-    name: string
-    description: string
-    x: number
-    y: number
-    isParent?: boolean
-    level?: number
-    parentId?: string
-  }>
-  connections: Array<{
-    from: string
-    to: string
-  }>
+/**
+ * Utility helpers for working with site flow data
+ */
+
+export type { SiteFlowData }
+
+/**
+ * Create an empty site flow object
+ */
+export const createEmptySiteFlow = (): SiteFlowData => ({
+  nodes: [],
+  connections: [],
+})
+
+/**
+ * Ensure all nodes have required fields and basic defaults
+ */
+export const normalizeSiteFlow = (data: SiteFlowData): SiteFlowData => {
+  const nodes = data.nodes.map((node, index) => ({
+    id: node.id || String(index + 1),
+    name: node.name || `Page ${index + 1}`,
+    description: node.description || '',
+    x: typeof node.x === 'number' ? node.x : 0,
+    y: typeof node.y === 'number' ? node.y : index * 160,
+    isParent: node.isParent,
+    level: node.level,
+  }))
+
+  // Filter out connections that reference missing nodes
+  const nodeIds = new Set(nodes.map((n) => n.id))
+  const connections = data.connections.filter(
+    (c) => nodeIds.has(c.from) && nodeIds.has(c.to),
+  )
+
+  return { nodes, connections }
 }
 
-const EXPORT_ROOT_ATTR = 'data-siteflow-export-root'
-const COLOR_PROPERTIES: Array<keyof CSSStyleDeclaration> = [
-  'color',
-  'backgroundColor',
-  'background',
-  'borderColor',
-  'borderTopColor',
-  'borderRightColor',
-  'borderBottomColor',
-  'borderLeftColor',
-  'outlineColor',
-  'fill',
-  'stroke',
-]
+type LevelMap = Record<string, number>
 
-const getColorResolver = (doc: Document): CanvasRenderingContext2D | null => {
-  const canvas = doc.createElement('canvas')
-  canvas.width = 1
-  canvas.height = 1
-  return canvas.getContext('2d')
-}
+/**
+ * Compute simple automatic layout based on "levels" inferred from connections.
+ * Each level is a vertical column; nodes are spaced vertically within a column.
+ */
+export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
+  if (data.nodes.length === 0) return data
 
-const resolveColorValue = (ctx: CanvasRenderingContext2D | null, value: string): string | undefined => {
-  if (!ctx) return value
-  if (!value) return value
-  const needsConversion = value.includes('oklab') || value.includes('color(') || value.includes('color-mix')
-  if (!needsConversion) {
-    return value
-  }
-  try {
-    ctx.fillStyle = value
-    if (typeof ctx.fillStyle === 'string') {
-      return ctx.fillStyle
-    }
-  } catch {
-    // Continue to fallback below
-  }
-  // Fallback to forcing via color-mix removal
-  if (needsConversion) {
-    const fallback = value
-      .replace(/oklab\([^)]*\)/gi, '')
-      .replace(/color-mix\([^)]*\)/gi, '')
-      .replace(/color\([^)]*\)/gi, '')
-    if (fallback.trim()) {
-      return fallback
-    }
-  }
-  return undefined
-}
+  const levelMap: LevelMap = {}
 
-const sanitizeColorsForExport = (doc: Document, rootElement: HTMLElement) => {
-  const win = doc.defaultView
-  if (!win) return
-  const colorResolver = getColorResolver(doc)
-  const elements = [rootElement, ...Array.from(rootElement.querySelectorAll<HTMLElement>('*'))]
-  elements.forEach((element) => {
-    const computed = win.getComputedStyle(element)
-    COLOR_PROPERTIES.forEach((prop) => {
-      const value = computed[prop]
-      if (typeof value === 'string' && value && value !== 'initial') {
-        const resolved = resolveColorValue(colorResolver, value)
-        if (resolved) {
-          element.style.setProperty(prop as string, resolved)
-        }
+  // Find roots (nodes that are never a "to" in any connection)
+  const pointedTo = new Set<string>()
+  for (const edge of data.connections) {
+    pointedTo.add(edge.to)
+  }
+
+  const rootIds = data.nodes
+    .filter((n) => !pointedTo.has(n.id))
+    .map((n) => n.id)
+
+  // BFS from roots to assign levels
+  const queue: Array<{ id: string; level: number }> = []
+  for (const id of rootIds) {
+    queue.push({ id, level: 0 })
+  }
+
+  while (queue.length > 0) {
+    const { id, level } = queue.shift() as { id: string; level: number }
+    if (levelMap[id] !== undefined && levelMap[id] <= level) continue
+    levelMap[id] = level
+
+    for (const edge of data.connections) {
+      if (edge.from === id) {
+        queue.push({ id: edge.to, level: level + 1 })
       }
+    }
+  }
+
+  const nodesWithLevels = data.nodes.map((node) => {
+    const level = levelMap[node.id] ?? 0
+    return { ...node, level }
+  })
+
+  // Group by level and assign positions
+  const byLevel = new Map<number, SiteFlowData['nodes']>()
+  for (const node of nodesWithLevels) {
+    const level = node.level ?? 0
+    if (!byLevel.has(level)) byLevel.set(level, [])
+    byLevel.get(level)!.push(node)
+  }
+
+  const COLUMN_WIDTH = 280
+  const ROW_HEIGHT = 140
+
+  const laidOutNodes: SiteFlowData['nodes'] = []
+  for (const [level, nodes] of Array.from(byLevel.entries()).sort(
+    (a, b) => a[0] - b[0],
+  )) {
+    nodes.forEach((node, index) => {
+      laidOutNodes.push({
+        ...node,
+        x: COLUMN_WIDTH * level,
+        y: ROW_HEIGHT * index,
+      })
     })
-    const normalizeBackground = (value: string | null) => {
-      if (!value) return
-      if (value.includes('oklab') || value.includes('color(') || value.includes('color-mix')) {
-        return 'none'
-      }
-      return value
-    }
-    const backgroundImage = normalizeBackground(computed.backgroundImage)
-    if (backgroundImage) {
-      element.style.backgroundImage = backgroundImage
-    }
-    const background = normalizeBackground(computed.background)
-    if (background === 'none') {
-      element.style.background = 'none'
-    }
+  }
+
+  return normalizeSiteFlow({
+    nodes: laidOutNodes,
+    connections: data.connections,
   })
 }
 
-export const exportSiteFlowAsImage = async (canvasElement: HTMLElement, filename: string = 'site-flow') => {
-  try {
-    // Dynamic import to avoid SSR issues
-    const html2canvas = (await import('html2canvas')).default
-    canvasElement.setAttribute(EXPORT_ROOT_ATTR, 'true')
-    const canvas = await html2canvas(canvasElement, {
-      backgroundColor: '#121212',
-      scale: 2,
-      logging: false,
-      onclone: (clonedDoc) => {
-        const clonedRoot = clonedDoc.querySelector<HTMLElement>(`[${EXPORT_ROOT_ATTR}="true"]`)
-        if (clonedRoot) {
-          sanitizeColorsForExport(clonedDoc, clonedRoot)
-        }
-      },
-    })
-    
-    const url = canvas.toDataURL('image/png')
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${filename}.png`
-    link.click()
-  } catch (error) {
-    console.error('Error exporting image:', error)
-    throw error
-  } finally {
-    canvasElement.removeAttribute(EXPORT_ROOT_ATTR)
-  }
-}
-
-export const exportSiteFlowAsJSON = (data: SiteFlowData, filename: string = 'site-flow') => {
-  const json = JSON.stringify(data, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${filename}.json`
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-export const importSiteFlowFromJSON = (file: File): Promise<SiteFlowData> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string)
-        resolve(data)
-      } catch (error) {
-        reject(new Error('Invalid JSON file'))
-      }
-    }
-    reader.onerror = () => reject(new Error('Failed to read file'))
-    reader.readAsText(file)
-  })
-}
 
