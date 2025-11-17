@@ -92,8 +92,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
 
       return {
         nodes: normalizedNodes,
-        width: maxX + 320,
-        height: maxY + 200,
+        width: maxX + 240,
+        height: maxY + 120,
       }
     }, [siteFlow])
 
@@ -163,29 +163,55 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
         {positioned && (
           <div className="relative w-full max-h-[600px] overflow-auto rounded-xl border border-divider/40 bg-gradient-to-br from-dark-surface/40 via-dark-card/30 to-dark-surface/40 shadow-inner">
             <div
-              className="relative p-8"
+              className="relative p-6"
               style={{
-                width: Math.max(positioned.width, 600),
-                height: Math.max(positioned.height, 300),
+                width: Math.max(positioned.width + 32, 600),
+                height: Math.max(positioned.height + 32, 300),
                 minHeight: '300px',
               }}
             >
               {/* Flow connectors with arrows */}
               <svg
-                className="absolute inset-0 pointer-events-none"
-                width={positioned.width}
-                height={positioned.height}
+                className="absolute inset-0 pointer-events-none overflow-visible"
+                style={{
+                  width: positioned.width + 32,
+                  height: positioned.height + 32,
+                }}
               >
+                <defs>
+                  <linearGradient id="flow-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="rgb(251 191 36)" stopOpacity="0.5" />
+                    <stop offset="50%" stopColor="rgb(251 191 36)" stopOpacity="0.7" />
+                    <stop offset="100%" stopColor="rgb(251 191 36)" stopOpacity="0.6" />
+                  </linearGradient>
+                  <marker
+                    id="arrowhead"
+                    markerWidth="10"
+                    markerHeight="8"
+                    refX="9"
+                    refY="4"
+                    orient="auto"
+                  >
+                    <polygon
+                      points="0 0, 10 4, 0 8"
+                      fill="rgb(251 191 36)"
+                      opacity="0.9"
+                    />
+                  </marker>
+                </defs>
                 {siteFlow?.connections.map((edge, index) => {
                   const from = positioned.nodes.find((n) => n.id === edge.from)
                   const to = positioned.nodes.find((n) => n.id === edge.to)
                   if (!from || !to) return null
 
+                  const NODE_WIDTH = 200
+                  const NODE_HEIGHT = 80
+                  
                   // Calculate connection points (right edge of from node, left edge of to node)
-                  const fromX = from.x + 280
-                  const fromY = from.y + 60
+                  const fromX = from.x + NODE_WIDTH
+                  const fromY = from.y + NODE_HEIGHT / 2
                   const toX = to.x
-                  const toY = to.y + 60
+                  const toY = to.y + NODE_HEIGHT / 2
 
                   // Calculate control points for smooth bezier curve
                   const controlOffset = Math.abs(toX - fromX) * 0.4
@@ -193,42 +219,16 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                   // Create smooth bezier curve
                   const path = `M ${fromX} ${fromY} C ${fromX + controlOffset} ${fromY}, ${toX - controlOffset} ${toY}, ${toX} ${toY}`
 
-                  // Arrow dimensions
-                  const arrowLength = 8
-                  const arrowWidth = 6
-
                   return (
-                    <g key={index}>
-                      <defs>
-                        <linearGradient id={`flow-gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="rgb(251 191 36)" stopOpacity="0.4" />
-                          <stop offset="50%" stopColor="rgb(251 191 36)" stopOpacity="0.6" />
-                          <stop offset="100%" stopColor="rgb(251 191 36)" stopOpacity="0.5" />
-                        </linearGradient>
-                        <marker
-                          id={`arrowhead-${index}`}
-                          markerWidth={arrowLength}
-                          markerHeight={arrowWidth}
-                          refX={arrowLength}
-                          refY={arrowWidth / 2}
-                          orient="auto"
-                        >
-                          <polygon
-                            points={`0 0, ${arrowLength} ${arrowWidth / 2}, 0 ${arrowWidth}`}
-                            fill="rgb(251 191 36)"
-                            opacity="0.8"
-                          />
-                        </marker>
-                      </defs>
-                      <path
-                        d={path}
-                        fill="none"
-                        stroke={`url(#flow-gradient-${index})`}
-                        strokeWidth={2.5}
-                        markerEnd={`url(#arrowhead-${index})`}
-                        className="drop-shadow-sm"
-                      />
-                    </g>
+                    <path
+                      key={index}
+                      d={path}
+                      fill="none"
+                      stroke="url(#flow-gradient)"
+                      strokeWidth={2.5}
+                      markerEnd="url(#arrowhead)"
+                      className="drop-shadow-sm"
+                    />
                   )
                 })}
               </svg>
@@ -237,35 +237,35 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
               {positioned.nodes.map((node) => (
                 <div
                   key={node.id}
-                  className="absolute rounded-xl border bg-gradient-to-br from-dark-card to-dark-surface/80 shadow-lg border-divider/50 hover:border-amber-gold/60 hover:shadow-xl transition-all duration-200 group"
+                  className="absolute rounded-lg border bg-gradient-to-br from-dark-card to-dark-surface/80 shadow-md border-divider/50 hover:border-amber-gold/60 hover:shadow-lg transition-all duration-200 group"
                   style={{
                     left: node.x,
                     top: node.y,
-                    width: '280px',
+                    width: '200px',
                   }}
                 >
-                  <div className="px-4 py-3 border-b border-divider/40 bg-dark-surface/30 flex items-center justify-between gap-3 rounded-t-xl">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-gold/20 to-amber-gold/10 flex items-center justify-center text-xs font-bold text-amber-gold shadow-sm flex-shrink-0">
+                  <div className="px-3 py-2 border-b border-divider/40 bg-dark-surface/30 flex items-center justify-between gap-2 rounded-t-lg">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-gold/20 to-amber-gold/10 flex items-center justify-center text-[0.65rem] font-bold text-amber-gold shadow-sm flex-shrink-0">
                         {node.level ?? 0}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-heading font-semibold text-charcoal truncate">
+                        <div className="text-xs font-heading font-semibold text-charcoal truncate">
                           {node.name}
                         </div>
-                        <div className="text-[0.7rem] text-mid-grey/70 truncate mt-0.5">
+                        <div className="text-[0.65rem] text-mid-grey/70 truncate mt-0.5">
                           #{node.id}
                         </div>
                       </div>
                     </div>
                     {node.isParent && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-gold/15 to-amber-gold/10 text-[0.65rem] text-amber-gold font-semibold border border-amber-gold/20 flex-shrink-0">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-gold/15 to-amber-gold/10 text-[0.6rem] text-amber-gold font-semibold border border-amber-gold/20 flex-shrink-0">
                         Hub
                       </span>
                     )}
                   </div>
                   {node.description && (
-                    <div className="px-4 py-3 text-[0.75rem] text-mid-grey leading-relaxed">
+                    <div className="px-3 py-2 text-[0.7rem] text-mid-grey leading-snug line-clamp-2">
                       {node.description}
                     </div>
                   )}
