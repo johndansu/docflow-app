@@ -36,7 +36,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     const [isGenerating, setIsGenerating] = useState(false)
     const [zoom, setZoom] = useState(30)
     const [draggedNode, setDraggedNode] = useState<string | null>(null)
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+    const dragOffsetRef = useRef({ x: 0, y: 0 })
     const svgRef = useRef<SVGSVGElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const flowContainerRef = useRef<HTMLDivElement>(null)
@@ -124,14 +124,18 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
       setDraggedNode(nodeId)
       const node = flowLayout?.nodes.find((n) => n.id === nodeId)
       if (node && flowContainerRef.current) {
-        const rect = flowContainerRef.current.getBoundingClientRect()
+        const flowRect = flowContainerRef.current.getBoundingClientRect()
         const scale = zoom / 100
-        const nodeX = (node.x - FLOW_NODE_WIDTH / 2) * scale + rect.left
-        const nodeY = (node.y - FLOW_NODE_HEIGHT / 2) * scale + rect.top
-        setDragOffset({
-          x: e.clientX - nodeX,
-          y: e.clientY - nodeY,
-        })
+        
+        // Calculate the actual position of the node on screen accounting for scale
+        const nodeScreenX = flowRect.left + (node.x - FLOW_NODE_WIDTH / 2) * scale
+        const nodeScreenY = flowRect.top + (node.y - FLOW_NODE_HEIGHT / 2) * scale
+        
+        // Calculate offset from mouse to node top-left corner
+        dragOffsetRef.current = {
+          x: e.clientX - nodeScreenX,
+          y: e.clientY - nodeScreenY,
+        }
       }
     }
 
@@ -140,10 +144,12 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
         const handleMouseMove = (e: MouseEvent) => {
           if (!draggedNode || !flowLayout || !flowContainerRef.current) return
           
-          const rect = flowContainerRef.current.getBoundingClientRect()
+          const flowRect = flowContainerRef.current.getBoundingClientRect()
           const scale = zoom / 100
-          const x = (e.clientX - rect.left - dragOffset.x) / scale + FLOW_NODE_WIDTH / 2
-          const y = (e.clientY - rect.top - dragOffset.y) / scale + FLOW_NODE_HEIGHT / 2
+          
+          // Calculate new position: mouse position minus offset, then convert to flow coordinates
+          const x = (e.clientX - flowRect.left - dragOffsetRef.current.x) / scale + FLOW_NODE_WIDTH / 2
+          const y = (e.clientY - flowRect.top - dragOffsetRef.current.y) / scale + FLOW_NODE_HEIGHT / 2
 
           setSiteFlow((prev) => {
             if (!prev) return prev
@@ -160,7 +166,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
 
         const handleMouseUp = () => {
           setDraggedNode(null)
-          setDragOffset({ x: 0, y: 0 })
+          dragOffsetRef.current = { x: 0, y: 0 }
         }
 
         window.addEventListener('mousemove', handleMouseMove)
@@ -171,7 +177,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
           window.removeEventListener('mouseup', handleMouseUp)
         }
       }
-    }, [draggedNode, dragOffset, flowLayout, zoom, onSiteFlowChange])
+    }, [draggedNode, flowLayout, zoom, onSiteFlowChange])
 
     if (!siteFlow && !error) {
       return (
