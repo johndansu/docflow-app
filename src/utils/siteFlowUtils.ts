@@ -73,15 +73,39 @@ const calculateTreePositions = (
   children: Map<string, string[]>,
   nodeMap: Map<string, SiteFlowData['nodes'][number]>,
   positions: Map<string, { x: number; y: number; level: number }>,
-  xOffset: { value: number }
+  xOffset: { value: number },
+  visiting: Set<string> = new Set(),
+  maxDepth: number = 20
 ): number => {
   const node = nodeMap.get(nodeId)
   if (!node) return 0
 
-  // Skip if already positioned (handles cycles)
+  // Prevent infinite recursion: check if already positioned or currently visiting
   if (positions.has(nodeId)) {
     return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
   }
+
+  // Prevent cycles: if we're already visiting this node, skip it
+  if (visiting.has(nodeId)) {
+    // Place it anyway to avoid infinite loop
+    const x = xOffset.value + FLOW_NODE_WIDTH / 2
+    const y = level * VERTICAL_SPACING + 100
+    positions.set(nodeId, { x, y, level })
+    xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+    return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+  }
+
+  // Prevent excessive depth
+  if (level > maxDepth) {
+    const x = xOffset.value + FLOW_NODE_WIDTH / 2
+    const y = level * VERTICAL_SPACING + 100
+    positions.set(nodeId, { x, y, level })
+    xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+    return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+  }
+
+  // Mark as visiting
+  visiting.add(nodeId)
 
   const nodeChildren = children.get(nodeId) || []
   const y = level * VERTICAL_SPACING + 100
@@ -91,6 +115,7 @@ const calculateTreePositions = (
     const x = xOffset.value + FLOW_NODE_WIDTH / 2
     positions.set(nodeId, { x, y, level })
     xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+    visiting.delete(nodeId)
     return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
   }
 
@@ -98,19 +123,27 @@ const calculateTreePositions = (
   const childrenPositions: number[] = []
   
   nodeChildren.forEach((childId) => {
-    calculateTreePositions(
-      childId,
-      level + 1,
-      children,
-      nodeMap,
-      positions,
-      xOffset
-    )
+    // Only process if not already positioned
+    if (!positions.has(childId)) {
+      calculateTreePositions(
+        childId,
+        level + 1,
+        children,
+        nodeMap,
+        positions,
+        xOffset,
+        visiting,
+        maxDepth
+      )
+    }
     const childPos = positions.get(childId)
     if (childPos) {
       childrenPositions.push(childPos.x)
     }
   })
+
+  // Remove from visiting set
+  visiting.delete(nodeId)
 
   if (childrenPositions.length === 0) {
     // Fallback if no children positioned
@@ -150,9 +183,10 @@ export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
   const xOffset = { value: 0 }
 
   // Handle multiple root nodes (unconnected components)
+  const visiting = new Set<string>()
   roots.forEach((root) => {
     if (!positions.has(root.id)) {
-      calculateTreePositions(root.id, 0, children, nodeMap, positions, xOffset)
+      calculateTreePositions(root.id, 0, children, nodeMap, positions, xOffset, visiting)
       // Add spacing between root components
       xOffset.value += HORIZONTAL_SPACING
     }

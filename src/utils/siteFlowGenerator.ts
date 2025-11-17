@@ -17,6 +17,7 @@ export const generateSiteFlow = async (
   const primaryContent = prdContent || appDescription || ''
   const contextContent = prdContent && appDescription ? appDescription : undefined
 
+  let raw = ''
   try {
     const prompt = prdContent 
       ? `Generate a site flow structure as JSON based on the following Product Requirements Document (PRD). The PRD contains detailed specifications about the application structure, features, and user flows. Create a site flow that accurately reflects the pages, screens, and navigation paths described in the PRD.
@@ -76,7 +77,7 @@ The nodes should represent pages/screens in the application. Connections represe
 Create a logical hierarchy starting from a home/landing page.
 Return ONLY the JSON, no markdown, no code blocks, no explanations.`
 
-    const raw = await generateWithAI({
+    raw = await generateWithAI({
       systemPrompt: prdContent 
         ? 'You are a UX designer expert at creating site flows based on Product Requirements Documents. Analyze the PRD carefully and extract all pages, screens, user flows, and navigation paths. Create a site flow that accurately reflects the structure and requirements described in the PRD. Return only valid JSON.'
         : 'You are a UX designer expert at creating site flows and user journeys. Return only valid JSON.',
@@ -86,20 +87,55 @@ Return ONLY the JSON, no markdown, no code blocks, no explanations.`
     })
 
     // Extract JSON from response
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    const jsonText = jsonMatch ? jsonMatch[0] : raw
+    let jsonText = raw.trim()
+    
+    // Try to extract JSON from markdown code blocks
+    const codeBlockMatch = jsonText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+    if (codeBlockMatch) {
+      jsonText = codeBlockMatch[1]
+    } else {
+      // Try to find JSON object
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonText = jsonMatch[0]
+      }
+    }
+
+    if (!jsonText || !jsonText.trim().startsWith('{')) {
+      console.error('No valid JSON found in response:', raw.substring(0, 200))
+      return createEmptySiteFlow()
+    }
 
     const parsed = JSON.parse(jsonText) as Partial<SiteFlowData>
-    if (!parsed.nodes || !Array.isArray(parsed.nodes)) {
+    
+    if (!parsed.nodes || !Array.isArray(parsed.nodes) || parsed.nodes.length === 0) {
+      console.error('Invalid or empty nodes in response:', parsed)
+      return createEmptySiteFlow()
+    }
+
+    // Validate node structure
+    const validNodes = parsed.nodes.filter((node: any) => 
+      node && 
+      typeof node.id === 'string' && 
+      typeof node.name === 'string'
+    )
+
+    if (validNodes.length === 0) {
+      console.error('No valid nodes found after filtering:', parsed.nodes)
       return createEmptySiteFlow()
     }
 
     return autoLayoutSiteFlow({
-      nodes: parsed.nodes as SiteFlowData['nodes'],
-      connections: (parsed.connections || []) as SiteFlowData['connections'],
+      nodes: validNodes as SiteFlowData['nodes'],
+      connections: (parsed.connections || []).filter((conn: any) => 
+        conn && 
+        typeof conn.from === 'string' && 
+        typeof conn.to === 'string'
+      ) as SiteFlowData['connections'],
     })
   } catch (error) {
     console.error('Error generating site flow:', error)
+    console.error('Raw response:', raw?.substring(0, 500))
     return createEmptySiteFlow()
   }
 }
