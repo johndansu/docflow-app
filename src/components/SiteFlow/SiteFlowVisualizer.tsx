@@ -38,6 +38,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     const svgRef = useRef<SVGSVGElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const flowContainerRef = useRef<HTMLDivElement>(null)
+    const lastGeneratedContent = useRef<string>('')
 
     // Update when initialSiteFlow changes
     useEffect(() => {
@@ -46,6 +47,19 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
         setSiteFlow(laidOut)
       }
     }, [initialSiteFlow])
+
+    // Auto-generate flow when appDescription or prdContent changes
+    useEffect(() => {
+      const currentContent = `${appDescription || ''}|${prdContent || ''}`
+      const hasContent = (appDescription?.trim() || prdContent?.trim()) && currentContent !== lastGeneratedContent.current
+      
+      // Auto-generate if we have new content and not currently generating
+      if (hasContent && !isGenerating) {
+        lastGeneratedContent.current = currentContent
+        handleGenerate()
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [appDescription, prdContent])
 
     useImperativeHandle(
       ref,
