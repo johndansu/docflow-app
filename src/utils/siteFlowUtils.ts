@@ -175,14 +175,26 @@ export const buildFlowLayout = (data: SiteFlowData): FlowLayout => {
     maxY = Math.max(maxY, node.y + FLOW_NODE_HEIGHT / 2)
   })
 
-  const width = maxX - minX + 200
-  const height = maxY - minY + 200
+  // Add padding to ensure all content is visible
+  const padding = 100
+  const width = maxX - minX + padding * 2
+  const height = maxY - minY + padding * 2
+
+  // Offset all nodes to ensure they start from a positive position
+  const offsetX = -minX + padding
+  const offsetY = -minY + padding
+
+  const offsetNodes = laidOut.nodes.map((node) => ({
+    ...node,
+    x: node.x + offsetX,
+    y: node.y + offsetY,
+  }))
 
   return {
-    nodes: laidOut.nodes as FlowLayoutNode[],
+    nodes: offsetNodes as FlowLayoutNode[],
     connections: laidOut.connections,
-    width: Math.max(width, 800),
-    height: Math.max(height, 600),
+    width: Math.max(width, 1200),
+    height: Math.max(height, 800),
   }
 }
 

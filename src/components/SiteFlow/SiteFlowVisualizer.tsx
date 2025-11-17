@@ -195,18 +195,19 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
         {/* Flow Visualization */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-auto relative"
-          style={{ minHeight: '500px' }}
+          className="flex-1 overflow-auto relative bg-dark-surface"
+          style={{ minHeight: '500px', padding: '40px' }}
         >
           {flowLayout && (
             <div
               ref={flowContainerRef}
-              className="relative origin-top-left transition-transform duration-200"
+              className="relative transition-transform duration-200"
               style={{
                 width: flowLayout.width,
                 height: flowLayout.height,
                 transform: `scale(${zoom / 100})`,
                 transformOrigin: 'top left',
+                margin: '0 auto',
               }}
             >
               {/* SVG for connections - positioned to match nodes */}
