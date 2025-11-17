@@ -20,11 +20,6 @@ type SiteFlowVisualizerProps = {
   onSiteFlowChange?: (data: SiteFlowData) => void
 }
 
-type TreeNode = {
-  node: SiteFlowData['nodes'][number]
-  children: TreeNode[]
-}
-
 const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
   ({ appDescription, prdContent, initialSiteFlow, onSiteFlowChange }, ref) => {
     const [siteFlow, setSiteFlow] = useState<SiteFlowData | null>(
@@ -76,151 +71,31 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
       onSiteFlowChange?.(laidOut)
     }
 
-    // Build tree structure from nodes and connections
-    const treeStructure = useMemo(() => {
+    // Calculate positioned nodes for flow diagram
+    const positioned = useMemo(() => {
       if (!siteFlow || siteFlow.nodes.length === 0) return null
 
-      const nodeMap = new Map(siteFlow.nodes.map((n) => [n.id, n]))
-      const childrenMap = new Map<string, string[]>()
-      const parentMap = new Map<string, string>()
+      const nodes = siteFlow.nodes
+      const xs = nodes.map((n) => n.x)
+      const ys = nodes.map((n) => n.y)
+      const minX = Math.min(...xs)
+      const minY = Math.min(...ys)
 
-      // Build parent-child relationships
-      for (const conn of siteFlow.connections) {
-        if (!childrenMap.has(conn.from)) {
-          childrenMap.set(conn.from, [])
-        }
-        childrenMap.get(conn.from)!.push(conn.to)
-        parentMap.set(conn.to, conn.from)
+      const normalizedNodes = nodes.map((n) => ({
+        ...n,
+        x: n.x - minX,
+        y: n.y - minY,
+      }))
+
+      const maxX = Math.max(...normalizedNodes.map((n) => n.x))
+      const maxY = Math.max(...normalizedNodes.map((n) => n.y))
+
+      return {
+        nodes: normalizedNodes,
+        width: maxX + 320,
+        height: maxY + 200,
       }
-
-      // Find root nodes (nodes with no parent)
-      const rootNodes = siteFlow.nodes.filter((n) => !parentMap.has(n.id))
-
-      // Build tree recursively
-      const buildTree = (nodeId: string, depth: number = 0): TreeNode | null => {
-        const node = nodeMap.get(nodeId)
-        if (!node) return null
-
-        const children = (childrenMap.get(nodeId) || []).map((childId) => buildTree(childId, depth + 1)).filter((n): n is TreeNode => n !== null)
-
-        return {
-          node: { ...node, level: depth },
-          children,
-        }
-      }
-
-      const trees = rootNodes.map((root) => buildTree(root.id)).filter((t): t is TreeNode => t !== null)
-
-      // If no trees found (all nodes are orphaned or no connections), create a flat list
-      if (trees.length === 0 && siteFlow.nodes.length > 0) {
-        return siteFlow.nodes.map((node) => ({
-          node: { ...node, level: 0 },
-          children: [],
-        }))
-      }
-
-      return trees.length > 0 ? trees : null
     }, [siteFlow])
-
-    // Render tree node recursively
-    const renderTreeNode = (treeNode: TreeNode, depth: number = 0, parentPath: boolean[] = []) => {
-      const { node, children } = treeNode
-      const hasChildren = children.length > 0
-      const indent = depth * 32
-
-      return (
-        <div key={node.id} className="relative">
-          <div className="flex items-start">
-            {/* Tree connector lines */}
-            {depth > 0 && (
-              <div className="absolute left-0 top-0 bottom-0" style={{ width: `${indent}px` }}>
-                {/* Vertical lines for parent path */}
-                {parentPath.slice(0, -1).map((isParentLast, idx) => (
-                  <div
-                    key={`v-${idx}`}
-                    className="absolute"
-                    style={{
-                      left: `${idx * 32 + 15}px`,
-                      top: 0,
-                      bottom: 0,
-                      width: '2px',
-                      background: isParentLast ? 'transparent' : 'linear-gradient(to bottom, rgb(251 191 36 / 0.25), rgb(251 191 36 / 0.15))',
-                    }}
-                  />
-                ))}
-                {/* Horizontal connector line */}
-                <div
-                  className="absolute top-6"
-                  style={{
-                    left: `${(depth - 1) * 32 + 15}px`,
-                    width: '18px',
-                    height: '2px',
-                    background: 'linear-gradient(to right, rgb(251 191 36 / 0.4), rgb(251 191 36 / 0.2))',
-                    borderRadius: '1px',
-                  }}
-                />
-                {/* Vertical line down to children */}
-                {hasChildren && (
-                  <div
-                    className="absolute top-6 bottom-0"
-                    style={{
-                      left: `${(depth - 1) * 32 + 15}px`,
-                      width: '2px',
-                      background: 'linear-gradient(to bottom, rgb(251 191 36 / 0.25), rgb(251 191 36 / 0.15))',
-                    }}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Node card */}
-            <div className="flex-1 min-w-0" style={{ marginLeft: depth > 0 ? `${indent}px` : '0' }}>
-              <div className="rounded-xl border bg-gradient-to-br from-dark-card to-dark-surface/80 shadow-md border-divider/50 hover:border-amber-gold/60 hover:shadow-lg transition-all duration-200 group">
-                <div className="px-4 py-3 border-b border-divider/40 bg-dark-surface/30 flex items-center justify-between gap-3 rounded-t-xl">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-gold/20 to-amber-gold/10 flex items-center justify-center text-xs font-bold text-amber-gold shadow-sm flex-shrink-0">
-                      {node.level ?? depth}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-heading font-semibold text-charcoal truncate">
-                        {node.name}
-                      </div>
-                      <div className="text-[0.7rem] text-mid-grey/70 truncate mt-0.5">
-                        #{node.id}
-                      </div>
-                    </div>
-                  </div>
-                  {node.isParent && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-gold/15 to-amber-gold/10 text-[0.65rem] text-amber-gold font-semibold border border-amber-gold/20 flex-shrink-0">
-                      Hub
-                    </span>
-                  )}
-                </div>
-                {node.description && (
-                  <div className="px-4 py-3 text-[0.75rem] text-mid-grey leading-relaxed">
-                    {node.description}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Children */}
-          {hasChildren && (
-            <div className="mt-3 ml-0">
-              {children.map((child, index) => {
-                const isLast = index === children.length - 1
-                return (
-                  <div key={child.node.id} className="mb-3">
-                    {renderTreeNode(child, depth + 1, [...parentPath, isLast])}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )
-    }
 
     return (
       <div className="space-y-4">
@@ -285,12 +160,115 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
           </div>
         )}
 
-        {treeStructure && (
+        {positioned && (
           <div className="relative w-full max-h-[600px] overflow-auto rounded-xl border border-divider/40 bg-gradient-to-br from-dark-surface/40 via-dark-card/30 to-dark-surface/40 shadow-inner">
-            <div className="p-6">
-              {treeStructure.map((tree, index) => (
-                <div key={tree.node.id} className={index > 0 ? 'mt-6' : ''}>
-                  {renderTreeNode(tree, 0, [])}
+            <div
+              className="relative p-8"
+              style={{
+                width: Math.max(positioned.width, 600),
+                height: Math.max(positioned.height, 300),
+                minHeight: '300px',
+              }}
+            >
+              {/* Flow connectors with arrows */}
+              <svg
+                className="absolute inset-0 pointer-events-none"
+                width={positioned.width}
+                height={positioned.height}
+              >
+                {siteFlow?.connections.map((edge, index) => {
+                  const from = positioned.nodes.find((n) => n.id === edge.from)
+                  const to = positioned.nodes.find((n) => n.id === edge.to)
+                  if (!from || !to) return null
+
+                  // Calculate connection points (right edge of from node, left edge of to node)
+                  const fromX = from.x + 280
+                  const fromY = from.y + 60
+                  const toX = to.x
+                  const toY = to.y + 60
+
+                  // Calculate control points for smooth bezier curve
+                  const controlOffset = Math.abs(toX - fromX) * 0.4
+
+                  // Create smooth bezier curve
+                  const path = `M ${fromX} ${fromY} C ${fromX + controlOffset} ${fromY}, ${toX - controlOffset} ${toY}, ${toX} ${toY}`
+
+                  // Arrow dimensions
+                  const arrowLength = 8
+                  const arrowWidth = 6
+
+                  return (
+                    <g key={index}>
+                      <defs>
+                        <linearGradient id={`flow-gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="rgb(251 191 36)" stopOpacity="0.4" />
+                          <stop offset="50%" stopColor="rgb(251 191 36)" stopOpacity="0.6" />
+                          <stop offset="100%" stopColor="rgb(251 191 36)" stopOpacity="0.5" />
+                        </linearGradient>
+                        <marker
+                          id={`arrowhead-${index}`}
+                          markerWidth={arrowLength}
+                          markerHeight={arrowWidth}
+                          refX={arrowLength}
+                          refY={arrowWidth / 2}
+                          orient="auto"
+                        >
+                          <polygon
+                            points={`0 0, ${arrowLength} ${arrowWidth / 2}, 0 ${arrowWidth}`}
+                            fill="rgb(251 191 36)"
+                            opacity="0.8"
+                          />
+                        </marker>
+                      </defs>
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke={`url(#flow-gradient-${index})`}
+                        strokeWidth={2.5}
+                        markerEnd={`url(#arrowhead-${index})`}
+                        className="drop-shadow-sm"
+                      />
+                    </g>
+                  )
+                })}
+              </svg>
+
+              {/* Flow nodes */}
+              {positioned.nodes.map((node) => (
+                <div
+                  key={node.id}
+                  className="absolute rounded-xl border bg-gradient-to-br from-dark-card to-dark-surface/80 shadow-lg border-divider/50 hover:border-amber-gold/60 hover:shadow-xl transition-all duration-200 group"
+                  style={{
+                    left: node.x,
+                    top: node.y,
+                    width: '280px',
+                  }}
+                >
+                  <div className="px-4 py-3 border-b border-divider/40 bg-dark-surface/30 flex items-center justify-between gap-3 rounded-t-xl">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-gold/20 to-amber-gold/10 flex items-center justify-center text-xs font-bold text-amber-gold shadow-sm flex-shrink-0">
+                        {node.level ?? 0}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-heading font-semibold text-charcoal truncate">
+                          {node.name}
+                        </div>
+                        <div className="text-[0.7rem] text-mid-grey/70 truncate mt-0.5">
+                          #{node.id}
+                        </div>
+                      </div>
+                    </div>
+                    {node.isParent && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-gold/15 to-amber-gold/10 text-[0.65rem] text-amber-gold font-semibold border border-amber-gold/20 flex-shrink-0">
+                        Hub
+                      </span>
+                    )}
+                  </div>
+                  {node.description && (
+                    <div className="px-4 py-3 text-[0.75rem] text-mid-grey leading-relaxed">
+                      {node.description}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
