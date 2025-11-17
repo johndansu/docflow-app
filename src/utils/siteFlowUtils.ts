@@ -1,13 +1,15 @@
 import type { SiteFlowData } from './storage'
 
-/**
- * Utility helpers for working with site flow data
- */
-
 export type { SiteFlowData }
 
+// Constants for node sizing
+export const FLOW_NODE_WIDTH = 200
+export const FLOW_NODE_HEIGHT = 80
+export const HORIZONTAL_SPACING = 250
+export const VERTICAL_SPACING = 120
+
 /**
- * Create an empty site flow object
+ * Create an empty site flow structure
  */
 export const createEmptySiteFlow = (): SiteFlowData => ({
   nodes: [],
@@ -15,211 +17,196 @@ export const createEmptySiteFlow = (): SiteFlowData => ({
 })
 
 /**
- * Ensure all nodes have required fields and basic defaults
+ * Normalize site flow data to ensure all required fields are present
  */
 export const normalizeSiteFlow = (data: SiteFlowData): SiteFlowData => {
-  const nodes = data.nodes.map((node, index) => ({
-    id: node.id || String(index + 1),
-    name: node.name || `Page ${index + 1}`,
-    description: node.description || '',
-    x: typeof node.x === 'number' ? node.x : 0,
-    y: typeof node.y === 'number' ? node.y : index * 160,
-    isParent: node.isParent,
-    level: node.level,
-  }))
-
-  // Filter out connections that reference missing nodes
-  const nodeIds = new Set(nodes.map((n) => n.id))
-  const connections = data.connections.filter(
-    (c) => nodeIds.has(c.from) && nodeIds.has(c.to),
-  )
-
-  return { nodes, connections }
+  return {
+    nodes: (data.nodes || []).map((node) => ({
+      id: node.id || '',
+      name: node.name || 'Untitled',
+      description: node.description || '',
+      x: node.x ?? 0,
+      y: node.y ?? 0,
+      isParent: node.isParent ?? false,
+      level: node.level ?? 0,
+    })),
+    connections: (data.connections || []).map((conn) => ({
+      from: conn.from || '',
+      to: conn.to || '',
+    })),
+  }
 }
 
-type LevelMap = Record<string, number>
-
 /**
- * Compute simple automatic layout based on "levels" inferred from connections.
- * Each level is a vertical column; nodes are spaced vertically within a column.
+ * Build tree hierarchy and calculate levels
  */
-export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
-  if (data.nodes.length === 0) return data
+const buildTreeHierarchy = (data: SiteFlowData): Map<string, number> => {
+  const levels = new Map<string, number>()
+  const children = new Map<string, string[]>()
+  const parents = new Map<string, string>()
 
-  const levelMap: LevelMap = {}
-
-  // Find roots (nodes that are never a "to" in any connection)
-  const pointedTo = new Set<string>()
-  for (const edge of data.connections) {
-    pointedTo.add(edge.to)
-  }
-
-  const rootIds = data.nodes
-    .filter((n) => !pointedTo.has(n.id))
-    .map((n) => n.id)
-
-  // BFS from roots to assign levels
-  const queue: Array<{ id: string; level: number }> = []
-  for (const id of rootIds) {
-    queue.push({ id, level: 0 })
-  }
-
-  while (queue.length > 0) {
-    const { id, level } = queue.shift() as { id: string; level: number }
-    if (levelMap[id] !== undefined && levelMap[id] <= level) continue
-    levelMap[id] = level
-
-    for (const edge of data.connections) {
-      if (edge.from === id) {
-        queue.push({ id: edge.to, level: level + 1 })
-      }
+  // Build parent-child relationships
+  data.connections.forEach((conn) => {
+    if (!children.has(conn.from)) {
+      children.set(conn.from, [])
     }
-  }
-
-  const nodesWithLevels = data.nodes.map((node) => {
-    const level = levelMap[node.id] ?? 0
-    return { ...node, level }
+    children.get(conn.from)!.push(conn.to)
+    parents.set(conn.to, conn.from)
   })
 
-  // Group by level and assign positions
-  const byLevel = new Map<number, SiteFlowData['nodes']>()
-  for (const node of nodesWithLevels) {
-    const level = node.level ?? 0
-    if (!byLevel.has(level)) byLevel.set(level, [])
-    byLevel.get(level)!.push(node)
-  }
+  // Find root nodes (nodes with no parents)
+  const rootNodes = data.nodes.filter((node) => !parents.has(node.id))
 
-  const COLUMN_WIDTH = 280
-  const ROW_HEIGHT = 140
+  // Assign level 0 to root nodes
+  rootNodes.forEach((node) => {
+    levels.set(node.id, 0)
+  })
 
-  const laidOutNodes: SiteFlowData['nodes'] = []
-  for (const [level, nodes] of Array.from(byLevel.entries()).sort(
-    (a, b) => a[0] - b[0],
-  )) {
-    nodes.forEach((node, index) => {
-      laidOutNodes.push({
-        ...node,
-        x: COLUMN_WIDTH * level,
-        y: ROW_HEIGHT * index,
-      })
+  // BFS to assign levels
+  const queue = [...rootNodes.map((n) => n.id)]
+  while (queue.length > 0) {
+    const currentId = queue.shift()!
+    const currentLevel = levels.get(currentId) ?? 0
+    const nodeChildren = children.get(currentId) || []
+
+    nodeChildren.forEach((childId) => {
+      if (!levels.has(childId)) {
+        levels.set(childId, currentLevel + 1)
+        queue.push(childId)
+      }
     })
   }
 
+  // Assign level 0 to any unconnected nodes
+  data.nodes.forEach((node) => {
+    if (!levels.has(node.id)) {
+      levels.set(node.id, 0)
+    }
+  })
+
+  return levels
+}
+
+/**
+ * Auto-layout site flow with tree hierarchy
+ */
+export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
+  if (!data.nodes || data.nodes.length === 0) {
+    return normalizeSiteFlow(data)
+  }
+
+  const normalized = normalizeSiteFlow(data)
+  const levels = buildTreeHierarchy(normalized)
+
+  // Group nodes by level
+  const nodesByLevel = new Map<number, typeof normalized.nodes>()
+  normalized.nodes.forEach((node) => {
+    const level = levels.get(node.id) ?? 0
+    if (!nodesByLevel.has(level)) {
+      nodesByLevel.set(level, [])
+    }
+    nodesByLevel.get(level)!.push(node)
+  })
+
+  // Calculate positions maintaining tree hierarchy
+  const laidOutNodes = normalized.nodes.map((node) => {
+    const level = levels.get(node.id) ?? 0
+    const nodesInLevel = nodesByLevel.get(level) || []
+    const indexInLevel = nodesInLevel.findIndex((n) => n.id === node.id)
+
+    // Calculate Y position based on level
+    const y = level * VERTICAL_SPACING + 100
+
+    // Calculate X position based on index in level
+    const totalInLevel = nodesInLevel.length
+    const startX = -(totalInLevel * (FLOW_NODE_WIDTH + HORIZONTAL_SPACING)) / 2
+    const x = startX + indexInLevel * (FLOW_NODE_WIDTH + HORIZONTAL_SPACING) + FLOW_NODE_WIDTH / 2
+
+    return {
+      ...node,
+      x,
+      y,
+      level,
+      isParent: (normalized.connections || []).some((conn) => conn.from === node.id),
+    }
+  })
+
   return normalizeSiteFlow({
     nodes: laidOutNodes,
-    connections: data.connections,
+    connections: normalized.connections,
   })
 }
 
-export const FLOW_NODE_WIDTH = 200
-export const FLOW_NODE_HEIGHT = 80
-
+/**
+ * Flow layout node type for rendering
+ */
 export type FlowLayoutNode = SiteFlowData['nodes'][number] & {
-  layoutX: number
-  layoutY: number
-  column: number
-  row: number
-}
-
-export type FlowLane = {
   level: number
-  column: number
-  x: number
-  label: string
+  isParent: boolean
 }
 
+/**
+ * Flow layout type
+ */
 export type FlowLayout = {
   nodes: FlowLayoutNode[]
-  nodeMap: Map<string, FlowLayoutNode>
-  lanes: FlowLane[]
+  connections: SiteFlowData['connections']
   width: number
   height: number
 }
 
-const levelLabels = ['Entry', 'Primary', 'Secondary', 'Details', 'Deep', 'Nested']
+/**
+ * Build flow layout for rendering
+ */
+export const buildFlowLayout = (data: SiteFlowData): FlowLayout => {
+  const normalized = normalizeSiteFlow(data)
+  const laidOut = autoLayoutSiteFlow(normalized)
 
-export const buildFlowLayout = (
-  data: SiteFlowData,
-  options?: {
-    horizontalGap?: number
-    verticalGap?: number
-  },
-): FlowLayout => {
-  const horizontalGap = options?.horizontalGap ?? 140
-  const verticalGap = options?.verticalGap ?? 60
+  // Calculate bounds
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
 
-  const nodeWidth = FLOW_NODE_WIDTH
-  const nodeHeight = FLOW_NODE_HEIGHT
-  const columnWidth = nodeWidth + horizontalGap
-  const rowHeight = nodeHeight + verticalGap
-
-  const levels = new Map<number, FlowLayoutNode[]>()
-
-  data.nodes.forEach((node) => {
-    const level = node.level ?? 0
-    if (!levels.has(level)) {
-      levels.set(level, [])
-    }
-    const list = levels.get(level)!
-    list.push({
-      ...node,
-      layoutX: 0,
-      layoutY: 0,
-      column: 0,
-      row: 0,
-    })
+  laidOut.nodes.forEach((node) => {
+    minX = Math.min(minX, node.x - FLOW_NODE_WIDTH / 2)
+    maxX = Math.max(maxX, node.x + FLOW_NODE_WIDTH / 2)
+    minY = Math.min(minY, node.y - FLOW_NODE_HEIGHT / 2)
+    maxY = Math.max(maxY, node.y + FLOW_NODE_HEIGHT / 2)
   })
 
-  const sortedLevels = Array.from(levels.entries()).sort(([a], [b]) => a - b)
-  const lanes: FlowLane[] = []
-  const positionedNodes: FlowLayoutNode[] = []
-
-  let maxWidth = nodeWidth
-  let maxHeight = nodeHeight
-
-  sortedLevels.forEach(([level, nodesAtLevel], columnIndex) => {
-    const sortedNodes = nodesAtLevel.sort((a, b) => {
-      const ay = typeof a.y === 'number' ? a.y : 0
-      const by = typeof b.y === 'number' ? b.y : 0
-      if (ay === by) {
-        return a.name.localeCompare(b.name)
-      }
-      return ay - by
-    })
-
-    lanes.push({
-      level,
-      column: columnIndex,
-      x: columnIndex * columnWidth,
-      label: levelLabels[columnIndex] ?? `Level ${level}`,
-    })
-
-    sortedNodes.forEach((node, rowIndex) => {
-      const layoutX = columnIndex * columnWidth
-      const layoutY = rowIndex * rowHeight
-      node.layoutX = layoutX
-      node.layoutY = layoutY
-      node.column = columnIndex
-      node.row = rowIndex
-
-      positionedNodes.push(node)
-      maxHeight = Math.max(maxHeight, layoutY + nodeHeight)
-      maxWidth = Math.max(maxWidth, layoutX + nodeWidth)
-    })
-  })
-
-  const nodeMap = new Map<string, FlowLayoutNode>()
-  positionedNodes.forEach((node) => {
-    nodeMap.set(node.id, node)
-  })
+  const width = maxX - minX + 200
+  const height = maxY - minY + 200
 
   return {
-    nodes: positionedNodes,
-    nodeMap,
-    lanes,
-    width: maxWidth,
-    height: maxHeight,
+    nodes: laidOut.nodes as FlowLayoutNode[],
+    connections: laidOut.connections,
+    width: Math.max(width, 800),
+    height: Math.max(height, 600),
   }
 }
 
+/**
+ * Get connection path coordinates for SVG
+ */
+export const getConnectionPath = (
+  fromNode: FlowLayoutNode,
+  toNode: FlowLayoutNode
+): { path: string; length: number } => {
+  const fromX = fromNode.x
+  const fromY = fromNode.y + FLOW_NODE_HEIGHT / 2
+  const toX = toNode.x
+  const toY = toNode.y - FLOW_NODE_HEIGHT / 2
+
+  // Create a smooth bezier curve
+  const midY = (fromY + toY) / 2
+  const path = `M ${fromX} ${fromY} C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY}`
+
+  // Approximate path length (for animation timing)
+  const dx = toX - fromX
+  const dy = toY - fromY
+  const length = Math.sqrt(dx * dx + dy * dy) * 1.2 // Approximate for bezier curve
+
+  return { path, length }
+}
 
