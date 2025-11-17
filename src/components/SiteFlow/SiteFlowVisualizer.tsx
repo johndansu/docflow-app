@@ -329,61 +329,66 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                       }}
                     >
                       <div
-                        className="group relative bg-dark-card border border-divider/40 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md hover:border-divider/60"
+                        className="group relative bg-gradient-to-br from-dark-card to-dark-card/95 border-2 border-divider/30 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:border-amber-gold/40 hover:scale-[1.02]"
                         style={{
                           minHeight: `${FLOW_NODE_HEIGHT}px`,
                           width: '100%',
                         }}
                       >
-                        {/* Header with level badge */}
-                        <div className="flex items-start justify-between p-4 pb-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-gold/10 text-amber-gold/90 border border-amber-gold/20">
-                                {node.level === 0 ? 'ROOT' : `L${node.level}`}
-                              </span>
+                        {/* Top accent bar */}
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-gold/60 via-amber-gold/40 to-transparent rounded-t-xl" />
+                        
+                        {/* Content */}
+                        <div className="p-4">
+                          {/* Header row */}
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-amber-gold/15 text-amber-gold border border-amber-gold/30">
+                                  {node.level === 0 ? 'ROOT' : `LEVEL ${node.level}`}
+                                </span>
+                              </div>
+                              <h3 className="font-bold text-charcoal text-base leading-tight mb-1.5">
+                                {node.name}
+                              </h3>
                             </div>
-                            <h3 className="font-semibold text-charcoal text-sm leading-tight mb-1">
-                              {node.name}
-                            </h3>
                           </div>
-                        </div>
 
-                        {/* Description */}
-                        {node.description && (
-                          <div className="px-4 pb-3">
-                            <p className="text-xs text-mid-grey leading-relaxed line-clamp-2">
+                          {/* Description */}
+                          {node.description && (
+                            <p className="text-xs text-mid-grey leading-relaxed mb-3 line-clamp-2">
                               {node.description}
                             </p>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Connection stats - Railway style */}
-                        <div className="px-4 pb-3 flex items-center gap-4 text-xs">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-amber-gold/60" />
-                            <span className="text-mid-grey">Outgoing:</span>
-                            <span className="text-charcoal font-semibold">
-                              {flowLayout.connections.filter((c) => c.from === node.id).length}
-                            </span>
+                          {/* Connection stats - compact flow style */}
+                          <div className="flex items-center gap-3 pt-2 border-t border-divider/20">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-amber-gold/70 shadow-sm" />
+                              <span className="text-[11px] text-mid-grey">Out:</span>
+                              <span className="text-[11px] text-charcoal font-bold">
+                                {flowLayout.connections.filter((c) => c.from === node.id).length}
+                              </span>
+                            </div>
+                            <div className="w-px h-3 bg-divider/30" />
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-amber-gold/50 shadow-sm" />
+                              <span className="text-[11px] text-mid-grey">In:</span>
+                              <span className="text-[11px] text-charcoal font-bold">
+                                {flowLayout.connections.filter((c) => c.to === node.id).length}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-amber-gold/40" />
-                            <span className="text-mid-grey">Incoming:</span>
-                            <span className="text-charcoal font-semibold">
-                              {flowLayout.connections.filter((c) => c.to === node.id).length}
-                            </span>
-                          </div>
-                        </div>
 
-                        {/* Action buttons - Railway style */}
-                        <div className="px-4 pb-4 pt-3 border-t border-divider/30 flex gap-2">
-                          <button className="flex-1 px-2.5 py-1.5 text-xs font-medium text-charcoal bg-dark-surface/50 hover:bg-dark-surface border border-divider/40 hover:border-divider/60 rounded transition-all">
-                            Rename
-                          </button>
-                          <button className="flex-1 px-2.5 py-1.5 text-xs font-medium text-charcoal bg-dark-surface/50 hover:bg-dark-surface border border-divider/40 hover:border-divider/60 rounded transition-all">
-                            Add child
-                          </button>
+                          {/* Action buttons - minimal flow style */}
+                          <div className="flex gap-1.5 mt-3 pt-2 border-t border-divider/20">
+                            <button className="flex-1 px-2 py-1 text-[10px] font-medium text-charcoal/70 hover:text-charcoal bg-dark-surface/30 hover:bg-dark-surface/50 border border-divider/30 hover:border-divider/50 rounded-md transition-all">
+                              Rename
+                            </button>
+                            <button className="flex-1 px-2 py-1 text-[10px] font-medium text-charcoal/70 hover:text-charcoal bg-dark-surface/30 hover:bg-dark-surface/50 border border-divider/30 hover:border-divider/50 rounded-md transition-all">
+                              Add child
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
