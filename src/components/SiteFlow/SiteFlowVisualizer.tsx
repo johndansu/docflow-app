@@ -35,6 +35,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     const [error, setError] = useState<string | null>(null)
     const [isGenerating, setIsGenerating] = useState(false)
     const [zoom, setZoom] = useState(30)
+    const [draggedNode, setDraggedNode] = useState<string | null>(null)
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
     const svgRef = useRef<SVGSVGElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const flowContainerRef = useRef<HTMLDivElement>(null)
@@ -94,13 +96,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
       }
     }
 
-    const handleAutoLayout = () => {
-      if (!siteFlow) return
-      const laidOut = autoLayoutSiteFlow(siteFlow)
-      setSiteFlow(laidOut)
-      onSiteFlowChange?.(laidOut)
-    }
-
     const flowLayout = useMemo(() => {
       if (!siteFlow || siteFlow.nodes.length === 0) {
         console.log('No flow layout - siteFlow:', siteFlow)
@@ -115,6 +110,68 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
         return null
       }
     }, [siteFlow])
+
+    const handleAutoLayout = () => {
+      if (!siteFlow) return
+      const laidOut = autoLayoutSiteFlow(siteFlow)
+      setSiteFlow(laidOut)
+      onSiteFlowChange?.(laidOut)
+    }
+
+    const handleNodeDragStart = (nodeId: string, e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setDraggedNode(nodeId)
+      const node = flowLayout?.nodes.find((n) => n.id === nodeId)
+      if (node && flowContainerRef.current) {
+        const rect = flowContainerRef.current.getBoundingClientRect()
+        const scale = zoom / 100
+        const nodeX = (node.x - FLOW_NODE_WIDTH / 2) * scale + rect.left
+        const nodeY = (node.y - FLOW_NODE_HEIGHT / 2) * scale + rect.top
+        setDragOffset({
+          x: e.clientX - nodeX,
+          y: e.clientY - nodeY,
+        })
+      }
+    }
+
+    useEffect(() => {
+      if (draggedNode && flowLayout) {
+        const handleMouseMove = (e: MouseEvent) => {
+          if (!draggedNode || !flowLayout || !flowContainerRef.current) return
+          
+          const rect = flowContainerRef.current.getBoundingClientRect()
+          const scale = zoom / 100
+          const x = (e.clientX - rect.left - dragOffset.x) / scale + FLOW_NODE_WIDTH / 2
+          const y = (e.clientY - rect.top - dragOffset.y) / scale + FLOW_NODE_HEIGHT / 2
+
+          setSiteFlow((prev) => {
+            if (!prev) return prev
+            const updated = {
+              ...prev,
+              nodes: prev.nodes.map((node) =>
+                node.id === draggedNode ? { ...node, x, y } : node
+              ),
+            }
+            onSiteFlowChange?.(updated)
+            return updated
+          })
+        }
+
+        const handleMouseUp = () => {
+          setDraggedNode(null)
+          setDragOffset({ x: 0, y: 0 })
+        }
+
+        window.addEventListener('mousemove', handleMouseMove)
+        window.addEventListener('mouseup', handleMouseUp)
+
+        return () => {
+          window.removeEventListener('mousemove', handleMouseMove)
+          window.removeEventListener('mouseup', handleMouseUp)
+        }
+      }
+    }, [draggedNode, dragOffset, flowLayout, zoom, onSiteFlowChange])
 
     if (!siteFlow && !error) {
       return (
@@ -321,15 +378,21 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                   return (
                     <div
                       key={node.id}
-                      className="absolute pointer-events-auto"
+                      className="absolute pointer-events-auto cursor-move select-none"
                       style={{
                         left: `${node.x - FLOW_NODE_WIDTH / 2}px`,
                         top: `${node.y - FLOW_NODE_HEIGHT / 2}px`,
                         width: `${FLOW_NODE_WIDTH}px`,
+                        zIndex: draggedNode === node.id ? 50 : 10,
                       }}
+                      onMouseDown={(e) => handleNodeDragStart(node.id, e)}
                     >
                       <div
-                        className="group relative bg-gradient-to-br from-dark-card to-dark-card/95 border-2 border-divider/30 rounded-xl shadow-lg transition-all duration-200 hover:shadow-xl hover:border-amber-gold/40 hover:scale-[1.02]"
+                        className={`group relative bg-gradient-to-br from-dark-card to-dark-card/95 border-2 rounded-xl shadow-lg transition-all duration-200 ${
+                          draggedNode === node.id
+                            ? 'border-amber-gold/60 shadow-2xl scale-105'
+                            : 'border-divider/30 hover:shadow-xl hover:border-amber-gold/40 hover:scale-[1.02]'
+                        }`}
                         style={{
                           minHeight: `${FLOW_NODE_HEIGHT}px`,
                           width: '100%',
@@ -382,10 +445,18 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
 
                           {/* Action buttons - minimal flow style */}
                           <div className="flex gap-1.5 mt-3 pt-2 border-t border-divider/20">
-                            <button className="flex-1 px-2 py-1 text-[10px] font-medium text-charcoal/70 hover:text-charcoal bg-dark-surface/30 hover:bg-dark-surface/50 border border-divider/30 hover:border-divider/50 rounded-md transition-all">
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="flex-1 px-2 py-1 text-[10px] font-medium text-charcoal/70 hover:text-charcoal bg-dark-surface/30 hover:bg-dark-surface/50 border border-divider/30 hover:border-divider/50 rounded-md transition-all"
+                            >
                               Rename
                             </button>
-                            <button className="flex-1 px-2 py-1 text-[10px] font-medium text-charcoal/70 hover:text-charcoal bg-dark-surface/30 hover:bg-dark-surface/50 border border-divider/30 hover:border-divider/50 rounded-md transition-all">
+                            <button
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="flex-1 px-2 py-1 text-[10px] font-medium text-charcoal/70 hover:text-charcoal bg-dark-surface/30 hover:bg-dark-surface/50 border border-divider/30 hover:border-divider/50 rounded-md transition-all"
+                            >
                               Add child
                             </button>
                           </div>
