@@ -35,7 +35,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     )
     const [error, setError] = useState<string | null>(null)
     const [isGenerating, setIsGenerating] = useState(false)
-    const [zoom, setZoom] = useState(100)
+    const [zoom, setZoom] = useState(30)
     const svgRef = useRef<SVGSVGElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const flowContainerRef = useRef<HTMLDivElement>(null)

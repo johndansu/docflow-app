@@ -5,8 +5,8 @@ export type { SiteFlowData }
 // Constants for node sizing
 export const FLOW_NODE_WIDTH = 220
 export const FLOW_NODE_HEIGHT = 100
-export const HORIZONTAL_SPACING = 180
-export const VERTICAL_SPACING = 140
+export const HORIZONTAL_SPACING = 240
+export const VERTICAL_SPACING = 180
 
 /**
  * Create an empty site flow structure
