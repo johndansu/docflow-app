@@ -329,53 +329,59 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                       }}
                     >
                       <div
-                        className="group relative bg-dark-card border border-divider/50 rounded-lg p-4 shadow-md transition-all duration-200 hover:shadow-lg"
+                        className="group relative bg-dark-card border border-divider/40 rounded-lg shadow-sm transition-all duration-200 hover:shadow-md hover:border-divider/60"
                         style={{
                           minHeight: `${FLOW_NODE_HEIGHT}px`,
                           width: '100%',
                         }}
                       >
-                        {/* Level Indicator */}
-                        <div className="mb-3">
-                          <span className="text-xs font-semibold text-amber-gold/80 uppercase tracking-wide">
-                            {node.level === 0 ? 'ROOT' : `LEVEL ${node.level}`}
-                          </span>
+                        {/* Header with level badge */}
+                        <div className="flex items-start justify-between p-4 pb-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-gold/10 text-amber-gold/90 border border-amber-gold/20">
+                                {node.level === 0 ? 'ROOT' : `L${node.level}`}
+                              </span>
+                            </div>
+                            <h3 className="font-semibold text-charcoal text-sm leading-tight mb-1">
+                              {node.name}
+                            </h3>
+                          </div>
                         </div>
-
-                        {/* Page Name */}
-                        <h3 className="font-semibold text-charcoal text-base mb-2">
-                          {node.name}
-                        </h3>
 
                         {/* Description */}
                         {node.description && (
-                          <p className="text-sm text-mid-grey mb-4 leading-relaxed">
-                            {node.description}
-                          </p>
+                          <div className="px-4 pb-3">
+                            <p className="text-xs text-mid-grey leading-relaxed line-clamp-2">
+                              {node.description}
+                            </p>
+                          </div>
                         )}
 
-                        {/* Connection Info */}
-                        <div className="mb-4 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
+                        {/* Connection stats - Railway style */}
+                        <div className="px-4 pb-3 flex items-center gap-4 text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-gold/60" />
                             <span className="text-mid-grey">Outgoing:</span>
-                            <span className="text-charcoal font-medium">
+                            <span className="text-charcoal font-semibold">
                               {flowLayout.connections.filter((c) => c.from === node.id).length}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-gold/40" />
                             <span className="text-mid-grey">Incoming:</span>
-                            <span className="text-charcoal font-medium">
+                            <span className="text-charcoal font-semibold">
                               {flowLayout.connections.filter((c) => c.to === node.id).length}
                             </span>
                           </div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 pt-3 border-t border-divider/30">
-                          <button className="flex-1 px-3 py-1.5 text-xs text-charcoal bg-dark-surface hover:bg-dark-surface/80 rounded border border-divider/50 transition-colors">
+                        {/* Action buttons - Railway style */}
+                        <div className="px-4 pb-4 pt-3 border-t border-divider/30 flex gap-2">
+                          <button className="flex-1 px-2.5 py-1.5 text-xs font-medium text-charcoal bg-dark-surface/50 hover:bg-dark-surface border border-divider/40 hover:border-divider/60 rounded transition-all">
                             Rename
                           </button>
-                          <button className="flex-1 px-3 py-1.5 text-xs text-charcoal bg-dark-surface hover:bg-dark-surface/80 rounded border border-divider/50 transition-colors">
+                          <button className="flex-1 px-2.5 py-1.5 text-xs font-medium text-charcoal bg-dark-surface/50 hover:bg-dark-surface border border-divider/40 hover:border-divider/60 rounded transition-all">
                             Add child
                           </button>
                         </div>

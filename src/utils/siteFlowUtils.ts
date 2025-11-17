@@ -107,7 +107,8 @@ const calculateLevels = (
 }
 
 /**
- * Auto-layout site flow with tree hierarchy - simpler, more flexible approach
+ * Auto-layout site flow - Railway-style organized column layout
+ * Inspired by Supabase Railway's clean, organized flow visualization
  */
 export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
   if (!data.nodes || data.nodes.length === 0) {
@@ -120,7 +121,7 @@ export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
   // Calculate levels for all nodes
   const levels = calculateLevels(normalized, children, parents)
   
-  // Group nodes by level
+  // Group nodes by level (columns)
   const nodesByLevel = new Map<number, typeof normalized.nodes>()
   normalized.nodes.forEach((node) => {
     const level = levels.get(node.id) ?? 0
@@ -130,74 +131,36 @@ export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
     nodesByLevel.get(level)!.push(node)
   })
   
-  // Calculate positions level by level
+  // Railway-style: Organize nodes in clean columns (levels)
   const positions = new Map<string, { x: number; y: number; level: number }>()
   const sortedLevels = Array.from(nodesByLevel.keys()).sort((a, b) => a - b)
-  const maxLevel = Math.max(...sortedLevels)
   
-  // First pass: Process from bottom to top, placing leaf nodes first
-  // This ensures children are positioned before parents
-  for (let level = maxLevel; level >= 0; level--) {
+  // Calculate column (level) x positions - evenly spaced columns
+  const columnXPositions = new Map<number, number>()
+  sortedLevels.forEach((level, index) => {
+    // Center columns horizontally
+    const totalColumns = sortedLevels.length
+    const totalWidth = (totalColumns - 1) * HORIZONTAL_SPACING
+    const startX = -totalWidth / 2
+    columnXPositions.set(level, startX + index * HORIZONTAL_SPACING)
+  })
+  
+  // Position nodes within each column
+  sortedLevels.forEach((level) => {
     const nodesInLevel = nodesByLevel.get(level) || []
+    const columnX = columnXPositions.get(level) || 0
     const y = level * VERTICAL_SPACING + 100
     
-    nodesInLevel.forEach((node) => {
-      const nodeChildren = children.get(node.id) || []
-      
-      if (nodeChildren.length === 0) {
-        // Leaf node - will be positioned in second pass
-        positions.set(node.id, { x: 0, y, level })
-      } else {
-        // Parent node - will be centered in second pass
-        positions.set(node.id, { x: 0, y, level })
-      }
-    })
-  }
-  
-  // Second pass: Calculate actual x positions
-  // Process from bottom to top so children are positioned before parents
-  const levelXOffsets = new Map<number, number>()
-  
-  for (let level = maxLevel; level >= 0; level--) {
-    const nodesInLevel = nodesByLevel.get(level) || []
+    // Calculate vertical spacing within column
+    const totalHeight = (nodesInLevel.length - 1) * (FLOW_NODE_HEIGHT + 40)
+    const startY = y - totalHeight / 2
     
-    nodesInLevel.forEach((node) => {
-      const nodeChildren = children.get(node.id) || []
-      let x: number
-      
-      if (nodeChildren.length === 0) {
-        // Leaf node - place sequentially
-        const currentOffset = levelXOffsets.get(level) || 0
-        x = currentOffset + FLOW_NODE_WIDTH / 2
-        levelXOffsets.set(level, currentOffset + FLOW_NODE_WIDTH + HORIZONTAL_SPACING)
-      } else {
-        // Parent node - center above children
-        const childPositions: number[] = []
-        
-        nodeChildren.forEach((childId) => {
-          const childPos = positions.get(childId)
-          if (childPos && childPos.x !== 0) {
-            childPositions.push(childPos.x)
-          }
-        })
-        
-        if (childPositions.length > 0) {
-          // Center above children
-          const minX = Math.min(...childPositions)
-          const maxX = Math.max(...childPositions)
-          x = (minX + maxX) / 2
-        } else {
-          // Fallback: place sequentially
-          const currentOffset = levelXOffsets.get(level) || 0
-          x = currentOffset + FLOW_NODE_WIDTH / 2
-          levelXOffsets.set(level, currentOffset + FLOW_NODE_WIDTH + HORIZONTAL_SPACING)
-        }
-      }
-      
-      const currentPos = positions.get(node.id)!
-      positions.set(node.id, { ...currentPos, x })
+    // Position each node in the column
+    nodesInLevel.forEach((node, index) => {
+      const nodeY = startY + index * (FLOW_NODE_HEIGHT + 40)
+      positions.set(node.id, { x: columnX, y: nodeY, level })
     })
-  }
+  })
   
   // Build laid out nodes
   const laidOutNodes = normalized.nodes.map((node) => {
