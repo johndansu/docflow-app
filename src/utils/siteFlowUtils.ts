@@ -38,12 +38,16 @@ export const normalizeSiteFlow = (data: SiteFlowData): SiteFlowData => {
 }
 
 /**
- * Build tree hierarchy and calculate levels
+ * Build tree structure for better layout
  */
-const buildTreeHierarchy = (data: SiteFlowData): Map<string, number> => {
-  const levels = new Map<string, number>()
+const buildTreeStructure = (data: SiteFlowData) => {
   const children = new Map<string, string[]>()
   const parents = new Map<string, string>()
+  const nodeMap = new Map<string, typeof data.nodes[number]>()
+
+  data.nodes.forEach((node) => {
+    nodeMap.set(node.id, node)
+  })
 
   // Build parent-child relationships
   data.connections.forEach((conn) => {
@@ -57,34 +61,68 @@ const buildTreeHierarchy = (data: SiteFlowData): Map<string, number> => {
   // Find root nodes (nodes with no parents)
   const rootNodes = data.nodes.filter((node) => !parents.has(node.id))
 
-  // Assign level 0 to root nodes
-  rootNodes.forEach((node) => {
-    levels.set(node.id, 0)
-  })
+  return { children, parents, rootNodes, nodeMap }
+}
 
-  // BFS to assign levels
-  const queue = [...rootNodes.map((n) => n.id)]
-  while (queue.length > 0) {
-    const currentId = queue.shift()!
-    const currentLevel = levels.get(currentId) ?? 0
-    const nodeChildren = children.get(currentId) || []
+/**
+ * Calculate node positions using a tree layout algorithm
+ */
+const calculateTreePositions = (
+  nodeId: string,
+  level: number,
+  children: Map<string, string[]>,
+  nodeMap: Map<string, SiteFlowData['nodes'][number]>,
+  positions: Map<string, { x: number; y: number; level: number }>,
+  xOffset: { value: number }
+): number => {
+  const node = nodeMap.get(nodeId)
+  if (!node) return 0
 
-    nodeChildren.forEach((childId) => {
-      if (!levels.has(childId)) {
-        levels.set(childId, currentLevel + 1)
-        queue.push(childId)
-      }
-    })
+  const nodeChildren = children.get(nodeId) || []
+  const y = level * VERTICAL_SPACING + 100
+
+  if (nodeChildren.length === 0) {
+    // Leaf node - just place it
+    const x = xOffset.value
+    positions.set(nodeId, { x, y, level })
+    xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+    return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
   }
 
-  // Assign level 0 to any unconnected nodes
-  data.nodes.forEach((node) => {
-    if (!levels.has(node.id)) {
-      levels.set(node.id, 0)
-    }
+  // Calculate positions for children first
+  let childrenWidth = 0
+  const childrenPositions: number[] = []
+  
+  nodeChildren.forEach((childId) => {
+    const childX = xOffset.value
+    const childWidth = calculateTreePositions(
+      childId,
+      level + 1,
+      children,
+      nodeMap,
+      positions,
+      xOffset
+    )
+    childrenPositions.push(childX + childWidth / 2 - FLOW_NODE_WIDTH / 2)
+    childrenWidth += childWidth
   })
 
-  return levels
+  // Center parent above children
+  const minChildX = Math.min(...childrenPositions)
+  const maxChildX = Math.max(...childrenPositions.map((x, i) => {
+    const childId = nodeChildren[i]
+    const childPos = positions.get(childId)
+    return childPos ? childPos.x + FLOW_NODE_WIDTH / 2 : x
+  }))
+  const centerX = (minChildX + maxChildX) / 2
+  const x = Math.max(centerX, xOffset.value)
+
+  positions.set(nodeId, { x, y, level })
+  
+  // Ensure we've moved past this subtree
+  xOffset.value = Math.max(xOffset.value, maxChildX + FLOW_NODE_WIDTH / 2 + HORIZONTAL_SPACING)
+  
+  return Math.max(childrenWidth, FLOW_NODE_WIDTH + HORIZONTAL_SPACING)
 }
 
 /**
@@ -96,38 +134,45 @@ export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
   }
 
   const normalized = normalizeSiteFlow(data)
-  const levels = buildTreeHierarchy(normalized)
+  const { children, rootNodes, nodeMap } = buildTreeStructure(normalized)
 
-  // Group nodes by level
-  const nodesByLevel = new Map<number, typeof normalized.nodes>()
-  normalized.nodes.forEach((node) => {
-    const level = levels.get(node.id) ?? 0
-    if (!nodesByLevel.has(level)) {
-      nodesByLevel.set(level, [])
+  // If no root nodes, use first node as root
+  const roots = rootNodes.length > 0 ? rootNodes : [normalized.nodes[0]]
+
+  // Calculate positions using tree layout
+  const positions = new Map<string, { x: number; y: number; level: number }>()
+  const xOffset = { value: 0 }
+
+  // Handle multiple root nodes (unconnected components)
+  roots.forEach((root) => {
+    if (!positions.has(root.id)) {
+      calculateTreePositions(root.id, 0, children, nodeMap, positions, xOffset)
+      // Add spacing between root components
+      xOffset.value += HORIZONTAL_SPACING
     }
-    nodesByLevel.get(level)!.push(node)
   })
 
-  // Calculate positions maintaining tree hierarchy
+  // Handle any unconnected nodes
+  normalized.nodes.forEach((node) => {
+    if (!positions.has(node.id)) {
+      const y = 0 * VERTICAL_SPACING + 100
+      const x = xOffset.value
+      positions.set(node.id, { x, y, level: 0 })
+      xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+    }
+  })
+
+  // Build laid out nodes
   const laidOutNodes = normalized.nodes.map((node) => {
-    const level = levels.get(node.id) ?? 0
-    const nodesInLevel = nodesByLevel.get(level) || []
-    const indexInLevel = nodesInLevel.findIndex((n) => n.id === node.id)
-
-    // Calculate Y position based on level
-    const y = level * VERTICAL_SPACING + 100
-
-    // Calculate X position based on index in level
-    const totalInLevel = nodesInLevel.length
-    const startX = -(totalInLevel * (FLOW_NODE_WIDTH + HORIZONTAL_SPACING)) / 2
-    const x = startX + indexInLevel * (FLOW_NODE_WIDTH + HORIZONTAL_SPACING) + FLOW_NODE_WIDTH / 2
+    const pos = positions.get(node.id) || { x: 0, y: 0, level: 0 }
+    const hasChildren = (normalized.connections || []).some((conn) => conn.from === node.id)
 
     return {
       ...node,
-      x,
-      y,
-      level,
-      isParent: (normalized.connections || []).some((conn) => conn.from === node.id),
+      x: pos.x,
+      y: pos.y,
+      level: pos.level,
+      isParent: hasChildren,
     }
   })
 
