@@ -35,8 +35,10 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     )
     const [error, setError] = useState<string | null>(null)
     const [isGenerating, setIsGenerating] = useState(false)
+    const [zoom, setZoom] = useState(100)
     const svgRef = useRef<SVGSVGElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
+    const flowContainerRef = useRef<HTMLDivElement>(null)
 
     // Update when initialSiteFlow changes
     useEffect(() => {
@@ -80,27 +82,6 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
       if (!siteFlow || siteFlow.nodes.length === 0) return null
       return buildFlowLayout(siteFlow)
     }, [siteFlow])
-
-    // Group nodes by level for list rendering
-    const nodesByLevel = useMemo(() => {
-      if (!flowLayout) return new Map<number, FlowLayoutNode[]>()
-
-      const grouped = new Map<number, FlowLayoutNode[]>()
-      flowLayout.nodes.forEach((node) => {
-        const level = node.level ?? 0
-        if (!grouped.has(level)) {
-          grouped.set(level, [])
-        }
-        grouped.get(level)!.push(node)
-      })
-
-      // Sort each level by x position
-      grouped.forEach((nodes) => {
-        nodes.sort((a, b) => a.x - b.x)
-      })
-
-      return grouped
-    }, [flowLayout])
 
     if (!siteFlow && !error) {
       return (
@@ -147,14 +128,53 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
               {siteFlow?.nodes.length || 0} pages, {siteFlow?.connections.length || 0} connections
             </p>
           </div>
-          <div className="flex gap-2">
-            {siteFlow && (
-              <button
-                onClick={handleAutoLayout}
-                className="px-3 py-1.5 text-sm text-mid-grey hover:text-charcoal hover:bg-dark-surface rounded-md transition-colors"
-              >
-                Auto Layout
-              </button>
+          <div className="flex items-center gap-4">
+            {siteFlow && flowLayout && (
+              <>
+                {/* Zoom Controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setZoom(Math.max(30, zoom - 10))}
+                    className="px-2 py-1 text-sm text-mid-grey hover:text-charcoal hover:bg-dark-surface rounded transition-colors"
+                    disabled={zoom <= 30}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                    </svg>
+                  </button>
+                  <div className="flex items-center gap-2 min-w-[140px]">
+                    <input
+                      type="range"
+                      min="30"
+                      max="100"
+                      value={zoom}
+                      onChange={(e) => setZoom(Number(e.target.value))}
+                      className="flex-1 h-1.5 bg-dark-surface rounded-lg appearance-none cursor-pointer accent-amber-gold slider"
+                      style={{
+                        background: `linear-gradient(to right, #F59E0B 0%, #F59E0B ${((zoom - 30) / 70) * 100}%, #2A2A2A ${((zoom - 30) / 70) * 100}%, #2A2A2A 100%)`,
+                      }}
+                    />
+                    <span className="text-xs text-charcoal font-semibold min-w-[3rem] text-right tabular-nums">
+                      {zoom}%
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setZoom(Math.min(100, zoom + 10))}
+                    className="px-2 py-1 text-sm text-mid-grey hover:text-charcoal hover:bg-dark-surface rounded transition-colors"
+                    disabled={zoom >= 100}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                    </svg>
+                  </button>
+                </div>
+                <button
+                  onClick={handleAutoLayout}
+                  className="px-3 py-1.5 text-sm text-mid-grey hover:text-charcoal hover:bg-dark-surface rounded-md transition-colors"
+                >
+                  Auto Layout
+                </button>
+              </>
             )}
             <button
               onClick={handleGenerate}
@@ -179,8 +199,17 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
           style={{ minHeight: '500px' }}
         >
           {flowLayout && (
-            <div className="relative" style={{ width: flowLayout.width, height: flowLayout.height }}>
-              {/* SVG for connections */}
+            <div
+              ref={flowContainerRef}
+              className="relative origin-top-left transition-transform duration-200"
+              style={{
+                width: flowLayout.width,
+                height: flowLayout.height,
+                transform: `scale(${zoom / 100})`,
+                transformOrigin: 'top left',
+              }}
+            >
+              {/* SVG for connections - positioned to match nodes */}
               <svg
                 ref={svgRef}
                 className="absolute top-0 left-0 pointer-events-none"
@@ -252,127 +281,128 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                 })}
               </svg>
 
-              {/* List-based node rendering by level */}
-              <div className="relative p-8">
-                <ul className="space-y-8">
-                  {Array.from(nodesByLevel.entries())
-                    .sort(([a], [b]) => a - b)
-                    .map(([level, nodes]) => (
-                      <li key={`level-${level}`} className="relative">
-                        {/* Level header */}
-                        <div className="flex items-center gap-4 mb-4 sticky top-0 bg-dark-surface/95 backdrop-blur-sm py-2 z-10">
-                          <div className="text-xs font-semibold text-amber-gold/70 uppercase tracking-wide">
-                            Level {level}
-                          </div>
-                          <div className="flex-1 h-px bg-divider/30" />
-                          <div className="text-xs text-mid-grey">{nodes.length} page{nodes.length !== 1 ? 's' : ''}</div>
-                        </div>
-                        
-                        {/* Nodes in this level - true list format */}
-                        <ul className="space-y-3">
-                          {nodes.map((node) => {
-                            const hasChildren = flowLayout.connections.some(
-                              (conn) => conn.from === node.id
-                            )
-                            const childCount = flowLayout.connections.filter(
-                              (conn) => conn.from === node.id
-                            ).length
-                            const children = flowLayout.connections
-                              .filter((conn) => conn.from === node.id)
-                              .map((conn) => flowLayout.nodes.find((n) => n.id === conn.to))
-                              .filter(Boolean) as FlowLayoutNode[]
+              {/* Nodes positioned absolutely to align with SVG */}
+              <div className="absolute inset-0">
+                {flowLayout.nodes.map((node) => {
+                  const hasChildren = flowLayout.connections.some(
+                    (conn) => conn.from === node.id
+                  )
+                  const childCount = flowLayout.connections.filter(
+                    (conn) => conn.from === node.id
+                  ).length
+                  const children = flowLayout.connections
+                    .filter((conn) => conn.from === node.id)
+                    .map((conn) => flowLayout.nodes.find((n) => n.id === conn.to))
+                    .filter(Boolean) as FlowLayoutNode[]
 
-                            return (
-                              <li
-                                key={node.id}
-                                className="relative"
-                                style={{
-                                  transform: `translate(${node.x - FLOW_NODE_WIDTH / 2}px, ${
-                                    node.y - FLOW_NODE_HEIGHT / 2
-                                  }px)`,
-                                }}
+                  return (
+                    <div
+                      key={node.id}
+                      className="absolute pointer-events-auto"
+                      style={{
+                        left: `${node.x - FLOW_NODE_WIDTH / 2}px`,
+                        top: `${node.y - FLOW_NODE_HEIGHT / 2}px`,
+                        width: `${FLOW_NODE_WIDTH}px`,
+                      }}
+                    >
+                      <div
+                        className={`group relative bg-gradient-to-br from-dark-card to-dark-card/80 border-2 rounded-xl p-4 shadow-lg transition-all duration-200 hover:shadow-2xl hover:scale-105 cursor-pointer backdrop-blur-sm ${
+                          hasChildren
+                            ? 'border-amber-gold/50 shadow-amber-gold/10'
+                            : 'border-divider/40 hover:border-amber-gold/30'
+                        }`}
+                        style={{
+                          minHeight: `${FLOW_NODE_HEIGHT}px`,
+                        }}
+                      >
+                        {/* Glow effect for parent nodes */}
+                        {hasChildren && (
+                          <div className="absolute -inset-0.5 bg-amber-gold/20 rounded-xl blur-sm opacity-0 group-hover:opacity-100 transition-opacity -z-10" />
+                        )}
+                        
+                        {/* Header */}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-charcoal text-sm leading-tight truncate mb-1">
+                              {node.name}
+                            </h3>
+                            {node.description && (
+                              <p className="text-xs text-mid-grey line-clamp-2 leading-relaxed">
+                                {node.description}
+                              </p>
+                            )}
+                          </div>
+                          {hasChildren && (
+                            <div className="flex-shrink-0 ml-2 flex items-center gap-1 bg-amber-gold/10 px-2 py-1 rounded-md">
+                              <span className="text-xs text-amber-gold font-bold">
+                                {childCount}
+                              </span>
+                              <svg
+                                className="w-3.5 h-3.5 text-amber-gold"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
                               >
-                                <div
-                                  className={`bg-dark-card border-2 rounded-lg p-4 shadow-lg transition-all hover:shadow-xl hover:border-amber-gold/50 cursor-pointer ${
-                                    hasChildren
-                                      ? 'border-amber-gold/40'
-                                      : 'border-divider/50'
-                                  }`}
-                                  style={{
-                                    width: `${FLOW_NODE_WIDTH}px`,
-                                    minHeight: `${FLOW_NODE_HEIGHT}px`,
-                                  }}
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2.5}
+                                  d="M19 9l-7 7-7-7"
+                                />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Connections preview */}
+                        {hasChildren && children.length > 0 && (
+                          <div className="mb-2 pt-2 border-t border-divider/20">
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <div className="w-1 h-1 rounded-full bg-amber-gold/60" />
+                              <span className="text-xs text-mid-grey font-medium">Links to</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {children.slice(0, 2).map((child) => (
+                                <span
+                                  key={child.id}
+                                  className="px-2 py-0.5 bg-dark-surface/80 rounded-md text-xs text-amber-gold/80 font-medium border border-amber-gold/20"
                                 >
-                                  <div className="flex items-start justify-between mb-2">
-                                    <h3 className="font-semibold text-charcoal text-sm leading-tight flex-1">
-                                      {node.name}
-                                    </h3>
-                                    {hasChildren && (
-                                      <div className="flex-shrink-0 ml-2 flex items-center gap-1">
-                                        <span className="text-xs text-amber-gold/70 font-medium">
-                                          {childCount}
-                                        </span>
-                                        <svg
-                                          className="w-4 h-4 text-amber-gold"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M19 9l-7 7-7-7"
-                                          />
-                                        </svg>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {node.description && (
-                                    <p className="text-xs text-mid-grey line-clamp-2 mb-2">
-                                      {node.description}
-                                    </p>
-                                  )}
-                                  {hasChildren && children.length > 0 && (
-                                    <div className="mb-2 pt-2 border-t border-divider/30">
-                                      <div className="text-xs text-mid-grey mb-1">Connects to:</div>
-                                      <div className="flex flex-wrap gap-1">
-                                        {children.slice(0, 3).map((child) => (
-                                          <span
-                                            key={child.id}
-                                            className="px-1.5 py-0.5 bg-dark-surface rounded text-xs text-amber-gold/70"
-                                          >
-                                            {child.name}
-                                          </span>
-                                        ))}
-                                        {children.length > 3 && (
-                                          <span className="px-1.5 py-0.5 bg-dark-surface rounded text-xs text-mid-grey">
-                                            +{children.length - 3}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className="mt-2 pt-2 border-t border-divider/30">
-                                    <div className="flex items-center gap-2 text-xs text-mid-grey">
-                                      <span className="px-1.5 py-0.5 bg-dark-surface rounded text-amber-gold/70 font-medium">
-                                        L{level}
-                                      </span>
-                                      {hasChildren && (
-                                        <span className="px-1.5 py-0.5 bg-dark-surface rounded text-amber-gold/70 font-medium">
-                                          Parent
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </li>
-                    ))}
-                </ul>
+                                  {child.name}
+                                </span>
+                              ))}
+                              {children.length > 2 && (
+                                <span className="px-2 py-0.5 bg-dark-surface/80 rounded-md text-xs text-mid-grey font-medium">
+                                  +{children.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Footer badges */}
+                        <div className="mt-3 pt-2.5 border-t border-divider/20 flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 bg-dark-surface rounded-md text-xs text-amber-gold/70 font-semibold">
+                              L{node.level ?? 0}
+                            </span>
+                            {hasChildren && (
+                              <span className="px-2 py-0.5 bg-amber-gold/10 rounded-md text-xs text-amber-gold font-medium border border-amber-gold/20">
+                                Parent
+                              </span>
+                            )}
+                          </div>
+                          {/* Connection indicator */}
+                          <div className="flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-gold/40" />
+                            <span className="text-xs text-mid-grey/60">
+                              {flowLayout.connections.filter((c) => c.to === node.id).length}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

@@ -3,10 +3,10 @@ import type { SiteFlowData } from './storage'
 export type { SiteFlowData }
 
 // Constants for node sizing
-export const FLOW_NODE_WIDTH = 200
-export const FLOW_NODE_HEIGHT = 80
-export const HORIZONTAL_SPACING = 250
-export const VERTICAL_SPACING = 120
+export const FLOW_NODE_WIDTH = 220
+export const FLOW_NODE_HEIGHT = 100
+export const HORIZONTAL_SPACING = 180
+export const VERTICAL_SPACING = 140
 
 /**
  * Create an empty site flow structure
@@ -193,19 +193,23 @@ export const getConnectionPath = (
   fromNode: FlowLayoutNode,
   toNode: FlowLayoutNode
 ): { path: string; length: number } => {
+  // Connection points: bottom center of parent, top center of child
   const fromX = fromNode.x
   const fromY = fromNode.y + FLOW_NODE_HEIGHT / 2
   const toX = toNode.x
   const toY = toNode.y - FLOW_NODE_HEIGHT / 2
 
-  // Create a smooth bezier curve
-  const midY = (fromY + toY) / 2
-  const path = `M ${fromX} ${fromY} C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY}`
+  // Create a smooth bezier curve with control points
+  const controlOffset = Math.abs(toY - fromY) * 0.4
+  const fromControlY = fromY + controlOffset
+  const toControlY = toY - controlOffset
+  
+  const path = `M ${fromX} ${fromY} C ${fromX} ${fromControlY}, ${toX} ${toControlY}, ${toX} ${toY}`
 
   // Approximate path length (for animation timing)
   const dx = toX - fromX
   const dy = toY - fromY
-  const length = Math.sqrt(dx * dx + dy * dy) * 1.2 // Approximate for bezier curve
+  const length = Math.sqrt(dx * dx + dy * dy) * 1.3 // Approximate for bezier curve
 
   return { path, length }
 }
