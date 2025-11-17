@@ -78,24 +78,27 @@ const calculateTreePositions = (
   const node = nodeMap.get(nodeId)
   if (!node) return 0
 
+  // Skip if already positioned (handles cycles)
+  if (positions.has(nodeId)) {
+    return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+  }
+
   const nodeChildren = children.get(nodeId) || []
   const y = level * VERTICAL_SPACING + 100
 
   if (nodeChildren.length === 0) {
     // Leaf node - just place it
-    const x = xOffset.value
+    const x = xOffset.value + FLOW_NODE_WIDTH / 2
     positions.set(nodeId, { x, y, level })
     xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
     return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
   }
 
   // Calculate positions for children first
-  let childrenWidth = 0
   const childrenPositions: number[] = []
   
   nodeChildren.forEach((childId) => {
-    const childX = xOffset.value
-    const childWidth = calculateTreePositions(
+    calculateTreePositions(
       childId,
       level + 1,
       children,
@@ -103,26 +106,29 @@ const calculateTreePositions = (
       positions,
       xOffset
     )
-    childrenPositions.push(childX + childWidth / 2 - FLOW_NODE_WIDTH / 2)
-    childrenWidth += childWidth
+    const childPos = positions.get(childId)
+    if (childPos) {
+      childrenPositions.push(childPos.x)
+    }
   })
+
+  if (childrenPositions.length === 0) {
+    // Fallback if no children positioned
+    const x = xOffset.value + FLOW_NODE_WIDTH / 2
+    positions.set(nodeId, { x, y, level })
+    xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+    return FLOW_NODE_WIDTH + HORIZONTAL_SPACING
+  }
 
   // Center parent above children
   const minChildX = Math.min(...childrenPositions)
-  const maxChildX = Math.max(...childrenPositions.map((x, i) => {
-    const childId = nodeChildren[i]
-    const childPos = positions.get(childId)
-    return childPos ? childPos.x + FLOW_NODE_WIDTH / 2 : x
-  }))
+  const maxChildX = Math.max(...childrenPositions)
   const centerX = (minChildX + maxChildX) / 2
-  const x = Math.max(centerX, xOffset.value)
+  const x = centerX
 
   positions.set(nodeId, { x, y, level })
   
-  // Ensure we've moved past this subtree
-  xOffset.value = Math.max(xOffset.value, maxChildX + FLOW_NODE_WIDTH / 2 + HORIZONTAL_SPACING)
-  
-  return Math.max(childrenWidth, FLOW_NODE_WIDTH + HORIZONTAL_SPACING)
+  return Math.max(maxChildX - minChildX + FLOW_NODE_WIDTH, FLOW_NODE_WIDTH + HORIZONTAL_SPACING)
 }
 
 /**
@@ -156,7 +162,7 @@ export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
   normalized.nodes.forEach((node) => {
     if (!positions.has(node.id)) {
       const y = 0 * VERTICAL_SPACING + 100
-      const x = xOffset.value
+      const x = xOffset.value + FLOW_NODE_WIDTH / 2
       positions.set(node.id, { x, y, level: 0 })
       xOffset.value += FLOW_NODE_WIDTH + HORIZONTAL_SPACING
     }

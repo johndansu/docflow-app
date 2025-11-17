@@ -61,10 +61,20 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
       setError(null)
 
       try {
+        console.log('Generating site flow...', { appDescription, prdContent })
         const data = await generateSiteFlow(appDescription, prdContent)
-        setSiteFlow(data)
-        onSiteFlowChange?.(data)
+        console.log('Generated site flow data:', data)
+        
+        if (!data || !data.nodes || data.nodes.length === 0) {
+          throw new Error('Generated flow has no nodes. Please try again with more details.')
+        }
+        
+        const laidOut = autoLayoutSiteFlow(data)
+        console.log('Laid out site flow:', laidOut)
+        setSiteFlow(laidOut)
+        onSiteFlowChange?.(laidOut)
       } catch (err) {
+        console.error('Error generating site flow:', err)
         setError(err instanceof Error ? err.message : 'Failed to generate site flow')
       } finally {
         setIsGenerating(false)
@@ -79,8 +89,18 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     }
 
     const flowLayout = useMemo(() => {
-      if (!siteFlow || siteFlow.nodes.length === 0) return null
-      return buildFlowLayout(siteFlow)
+      if (!siteFlow || siteFlow.nodes.length === 0) {
+        console.log('No flow layout - siteFlow:', siteFlow)
+        return null
+      }
+      try {
+        const layout = buildFlowLayout(siteFlow)
+        console.log('Flow layout built:', layout)
+        return layout
+      } catch (error) {
+        console.error('Error building flow layout:', error)
+        return null
+      }
     }, [siteFlow])
 
     if (!siteFlow && !error) {
@@ -198,7 +218,17 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
           className="flex-1 overflow-auto relative bg-dark-surface"
           style={{ minHeight: '500px', padding: '40px' }}
         >
-          {flowLayout && (
+          {!flowLayout && siteFlow && siteFlow.nodes.length > 0 && (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <p className="text-mid-grey mb-2">Calculating layout...</p>
+                <p className="text-xs text-mid-grey/60">
+                  {siteFlow.nodes.length} nodes found
+                </p>
+              </div>
+            </div>
+          )}
+          {flowLayout && flowLayout.nodes.length > 0 && (
             <div
               ref={flowContainerRef}
               className="relative transition-transform duration-200"
