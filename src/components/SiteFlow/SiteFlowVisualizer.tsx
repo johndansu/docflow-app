@@ -3,11 +3,17 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import type { SiteFlowData } from '../../utils/storage'
 import { generateSiteFlow } from '../../utils/siteFlowGenerator'
-import { autoLayoutSiteFlow } from '../../utils/siteFlowUtils'
+import {
+  autoLayoutSiteFlow,
+  buildFlowLayout,
+  FLOW_NODE_HEIGHT,
+  FLOW_NODE_WIDTH,
+} from '../../utils/siteFlowUtils'
 
 export type SiteFlowHandle = {
   getCurrentSiteFlow: () => SiteFlowData | null
@@ -27,6 +33,7 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     )
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const canvasRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
       if (initialSiteFlow) {
@@ -74,28 +81,16 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     // Calculate positioned nodes for flow diagram
     const positioned = useMemo(() => {
       if (!siteFlow || siteFlow.nodes.length === 0) return null
-
-      const nodes = siteFlow.nodes
-      const xs = nodes.map((n) => n.x)
-      const ys = nodes.map((n) => n.y)
-      const minX = Math.min(...xs)
-      const minY = Math.min(...ys)
-
-      const normalizedNodes = nodes.map((n) => ({
-        ...n,
-        x: n.x - minX,
-        y: n.y - minY,
-      }))
-
-      const maxX = Math.max(...normalizedNodes.map((n) => n.x))
-      const maxY = Math.max(...normalizedNodes.map((n) => n.y))
-
-      return {
-        nodes: normalizedNodes,
-        width: maxX + 240,
-        height: maxY + 120,
-      }
+      return buildFlowLayout(siteFlow)
     }, [siteFlow])
+
+    const laneHeaderHeight = 36
+    const canvasHeight = positioned ? positioned.height + laneHeaderHeight : 0
+    const canvasWidth = positioned ? positioned.width : 0
+
+    const handleFocusFlow = () => {
+      canvasRef.current?.scrollTo({ top: 0, left: 0, behavior: 'smooth' })
+    }
 
     return (
       <div className="space-y-4">
@@ -106,7 +101,16 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
               Visual structure of your app screens and navigation
             </p>
           </div>
-          <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {positioned && (
+              <button
+                type="button"
+                onClick={handleFocusFlow}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-divider/40 text-mid-grey hover:text-charcoal hover:border-amber-gold/50 transition-all duration-200"
+              >
+                Focus flow
+              </button>
+            )}
             {siteFlow && (
               <button
                 type="button"
@@ -161,12 +165,25 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
         )}
 
         {positioned && (
-          <div className="relative w-full max-h-[600px] overflow-auto rounded-xl border border-divider/40 bg-gradient-to-br from-dark-surface/40 via-dark-card/30 to-dark-surface/40 shadow-inner">
+          <div
+            ref={canvasRef}
+            className="relative w-full max-h-[600px] overflow-auto rounded-xl border border-divider/40 bg-gradient-to-br from-dark-surface/40 via-dark-card/30 to-dark-surface/40 shadow-inner"
+          >
+            <div className="absolute inset-0 rounded-xl pointer-events-none opacity-50">
+              <div
+                className="w-full h-full"
+                style={{
+                  backgroundImage:
+                    'linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(180deg, rgba(255,255,255,0.02) 1px, transparent 1px)',
+                  backgroundSize: '40px 40px',
+                }}
+              ></div>
+            </div>
             <div
               className="relative p-6"
               style={{
-                width: Math.max(positioned.width + 32, 600),
-                height: Math.max(positioned.height + 32, 300),
+                width: Math.max(canvasWidth + 32, 600),
+                height: Math.max(canvasHeight + 32, 320),
                 minHeight: '300px',
               }}
             >
@@ -174,8 +191,8 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
               <svg
                 className="absolute inset-0 pointer-events-none overflow-visible"
                 style={{
-                  width: positioned.width + 32,
-                  height: positioned.height + 32,
+                  width: canvasWidth + 32,
+                  height: canvasHeight + 32,
                 }}
               >
                 <defs>
@@ -200,18 +217,14 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                   </marker>
                 </defs>
                 {siteFlow?.connections.map((edge, index) => {
-                  const from = positioned.nodes.find((n) => n.id === edge.from)
-                  const to = positioned.nodes.find((n) => n.id === edge.to)
+                  const from = positioned.nodeMap.get(edge.from)
+                  const to = positioned.nodeMap.get(edge.to)
                   if (!from || !to) return null
 
-                  const NODE_WIDTH = 200
-                  const NODE_HEIGHT = 80
-                  
-                  // Calculate connection points (right edge of from node, left edge of to node)
-                  const fromX = from.x + NODE_WIDTH
-                  const fromY = from.y + NODE_HEIGHT / 2
-                  const toX = to.x
-                  const toY = to.y + NODE_HEIGHT / 2
+                  const fromX = from.layoutX + FLOW_NODE_WIDTH
+                  const fromY = from.layoutY + laneHeaderHeight + FLOW_NODE_HEIGHT / 2
+                  const toX = to.layoutX
+                  const toY = to.layoutY + laneHeaderHeight + FLOW_NODE_HEIGHT / 2
 
                   // Calculate control points for smooth bezier curve
                   const controlOffset = Math.abs(toX - fromX) * 0.4
@@ -233,15 +246,33 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                 })}
               </svg>
 
+              {/* Lane labels */}
+              {positioned.lanes.map((lane) => (
+                <div
+                  key={lane.column}
+                  className="absolute text-[0.65rem] uppercase tracking-wide text-mid-grey/70 font-semibold flex flex-col items-start gap-1"
+                  style={{
+                    left: lane.x,
+                    top: 0,
+                    width: FLOW_NODE_WIDTH,
+                  }}
+                >
+                  <span className="px-2 py-0.5 rounded-full border border-divider/40 bg-dark-surface/50">
+                    {lane.label}
+                  </span>
+                  <span className="block w-full h-px bg-divider/40"></span>
+                </div>
+              ))}
+
               {/* Flow nodes */}
               {positioned.nodes.map((node) => (
                 <div
                   key={node.id}
                   className="absolute rounded-lg border bg-gradient-to-br from-dark-card to-dark-surface/80 shadow-md border-divider/50 hover:border-amber-gold/60 hover:shadow-lg transition-all duration-200 group"
                   style={{
-                    left: node.x,
-                    top: node.y,
-                    width: '200px',
+                    left: node.layoutX,
+                    top: node.layoutY + laneHeaderHeight,
+                    width: `${FLOW_NODE_WIDTH}px`,
                   }}
                 >
                   <div className="px-3 py-2 border-b border-divider/40 bg-dark-surface/30 flex items-center justify-between gap-2 rounded-t-lg">
@@ -264,13 +295,40 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
                       </span>
                     )}
                   </div>
-                  {node.description && (
-                    <div className="px-3 py-2 text-[0.7rem] text-mid-grey leading-snug line-clamp-2">
+                  {node.description ? (
+                    <div className="px-3 py-2 text-[0.7rem] text-mid-grey leading-snug h-[44px] overflow-hidden text-ellipsis">
                       {node.description}
                     </div>
+                  ) : (
+                    <div className="px-3 py-2 text-[0.7rem] text-mid-grey/70 italic">No description</div>
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {positioned && (
+          <div className="flex flex-wrap items-center gap-4 text-[0.7rem] text-mid-grey/80 border border-dashed border-divider/40 rounded-lg px-4 py-3 bg-dark-card/30">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-gold/20 to-amber-gold/10 border border-amber-gold/30"></span>
+              <span>Flow level badge</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-0.5 rounded bg-gradient-to-r from-amber-gold/15 to-amber-gold/10 text-amber-gold border border-amber-gold/20 text-[0.65rem] font-semibold">
+                Hub
+              </span>
+              <span>High-connectivity node</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-0.5 bg-gradient-to-r from-amber-gold/60 to-amber-gold/30 relative">
+                <span className="absolute -right-2 -top-1.5 w-0 h-0 border-l-[6px] border-l-amber-gold border-y-[4px] border-y-transparent"></span>
+              </span>
+              <span>Primary navigation path</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-amber-gold/30 border border-amber-gold/50"></span>
+              <span>Entry / root node</span>
             </div>
           </div>
         )}

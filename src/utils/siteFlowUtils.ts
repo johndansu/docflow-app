@@ -111,4 +111,115 @@ export const autoLayoutSiteFlow = (data: SiteFlowData): SiteFlowData => {
   })
 }
 
+export const FLOW_NODE_WIDTH = 200
+export const FLOW_NODE_HEIGHT = 80
+
+export type FlowLayoutNode = SiteFlowData['nodes'][number] & {
+  layoutX: number
+  layoutY: number
+  column: number
+  row: number
+}
+
+export type FlowLane = {
+  level: number
+  column: number
+  x: number
+  label: string
+}
+
+export type FlowLayout = {
+  nodes: FlowLayoutNode[]
+  nodeMap: Map<string, FlowLayoutNode>
+  lanes: FlowLane[]
+  width: number
+  height: number
+}
+
+const levelLabels = ['Entry', 'Primary', 'Secondary', 'Details', 'Deep', 'Nested']
+
+export const buildFlowLayout = (
+  data: SiteFlowData,
+  options?: {
+    horizontalGap?: number
+    verticalGap?: number
+  },
+): FlowLayout => {
+  const horizontalGap = options?.horizontalGap ?? 140
+  const verticalGap = options?.verticalGap ?? 60
+
+  const nodeWidth = FLOW_NODE_WIDTH
+  const nodeHeight = FLOW_NODE_HEIGHT
+  const columnWidth = nodeWidth + horizontalGap
+  const rowHeight = nodeHeight + verticalGap
+
+  const levels = new Map<number, FlowLayoutNode[]>()
+
+  data.nodes.forEach((node) => {
+    const level = node.level ?? 0
+    if (!levels.has(level)) {
+      levels.set(level, [])
+    }
+    const list = levels.get(level)!
+    list.push({
+      ...node,
+      layoutX: 0,
+      layoutY: 0,
+      column: 0,
+      row: 0,
+    })
+  })
+
+  const sortedLevels = Array.from(levels.entries()).sort(([a], [b]) => a - b)
+  const lanes: FlowLane[] = []
+  const positionedNodes: FlowLayoutNode[] = []
+
+  let maxWidth = nodeWidth
+  let maxHeight = nodeHeight
+
+  sortedLevels.forEach(([level, nodesAtLevel], columnIndex) => {
+    const sortedNodes = nodesAtLevel.sort((a, b) => {
+      const ay = typeof a.y === 'number' ? a.y : 0
+      const by = typeof b.y === 'number' ? b.y : 0
+      if (ay === by) {
+        return a.name.localeCompare(b.name)
+      }
+      return ay - by
+    })
+
+    lanes.push({
+      level,
+      column: columnIndex,
+      x: columnIndex * columnWidth,
+      label: levelLabels[columnIndex] ?? `Level ${level}`,
+    })
+
+    sortedNodes.forEach((node, rowIndex) => {
+      const layoutX = columnIndex * columnWidth
+      const layoutY = rowIndex * rowHeight
+      node.layoutX = layoutX
+      node.layoutY = layoutY
+      node.column = columnIndex
+      node.row = rowIndex
+
+      positionedNodes.push(node)
+      maxHeight = Math.max(maxHeight, layoutY + nodeHeight)
+      maxWidth = Math.max(maxWidth, layoutX + nodeWidth)
+    })
+  })
+
+  const nodeMap = new Map<string, FlowLayoutNode>()
+  positionedNodes.forEach((node) => {
+    nodeMap.set(node.id, node)
+  })
+
+  return {
+    nodes: positionedNodes,
+    nodeMap,
+    lanes,
+    width: maxWidth,
+    height: maxHeight,
+  }
+}
+
 
