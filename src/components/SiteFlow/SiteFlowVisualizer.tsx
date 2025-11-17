@@ -101,20 +101,20 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
     }, [siteFlow])
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-semibold text-charcoal">Site Flow Map</h3>
-            <p className="text-xs text-mid-grey">
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-heading font-semibold text-charcoal mb-1">Site Flow Map</h3>
+            <p className="text-xs text-mid-grey leading-relaxed">
               Visual structure of your app screens and navigation
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 flex-shrink-0">
             {siteFlow && (
               <button
                 type="button"
                 onClick={handleAutoLayout}
-                className="px-2.5 py-1 text-xs rounded-md border border-divider/60 text-mid-grey hover:text-charcoal hover:border-amber-gold/60 hover:bg-dark-surface/40 transition-colors"
+                className="px-3.5 py-1.5 text-xs font-medium rounded-lg border border-divider/50 text-mid-grey hover:text-charcoal hover:border-amber-gold/50 hover:bg-amber-gold/5 transition-all duration-200"
               >
                 Auto-layout
               </button>
@@ -123,64 +123,92 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
               type="button"
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="px-3 py-1.5 text-xs rounded-md bg-amber-gold text-white font-medium hover:bg-amber-gold/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm transition-colors"
+              className="px-4 py-1.5 text-xs font-medium rounded-lg bg-amber-gold text-white hover:bg-amber-gold/90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-1.5"
             >
-              {isGenerating ? 'Generating…' : siteFlow ? 'Regenerate Flow' : 'Generate Flow'}
+              {isGenerating ? (
+                <>
+                  <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Generating…
+                </>
+              ) : (
+                <>
+                  {siteFlow ? 'Regenerate Flow' : 'Generate Flow'}
+                </>
+              )}
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="text-xs text-red-500 bg-red-500/5 border border-red-500/30 rounded-md px-3 py-2">
-            {error}
+          <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 flex items-start gap-2">
+            <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="leading-relaxed">{error}</span>
           </div>
         )}
 
         {!siteFlow && !error && (
-          <div className="text-xs text-mid-grey bg-dark-card/40 border border-dashed border-divider/60 rounded-md px-4 py-3">
-            Click <span className="font-medium text-charcoal">Generate Flow</span> to create a
-            visual site map from your description and PRD.
+          <div className="text-xs text-mid-grey bg-dark-card/50 border border-dashed border-divider/40 rounded-lg px-5 py-4 text-center">
+            <svg className="w-8 h-8 mx-auto mb-2.5 text-mid-grey/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+            <p className="leading-relaxed">
+              Click <span className="font-medium text-charcoal">Generate Flow</span> to create a
+              visual site map from your description and PRD.
+            </p>
           </div>
         )}
 
         {positioned && (
-          <div className="relative w-full max-h-[420px] overflow-auto rounded-lg border border-divider/60 bg-gradient-to-b from-dark-surface/60 to-dark-card/60">
+          <div className="relative w-full max-h-[500px] overflow-auto rounded-xl border border-divider/40 bg-gradient-to-br from-dark-surface/40 via-dark-card/30 to-dark-surface/40 shadow-inner">
             <div
-              className="relative"
+              className="relative p-8"
               style={{
-                width: Math.max(positioned.width, 600),
-                height: Math.max(positioned.height, 260),
+                width: Math.max(positioned.width + 64, 600),
+                height: Math.max(positioned.height + 64, 300),
+                minHeight: '300px',
               }}
             >
               {/* Connectors */}
               <svg
                 className="absolute inset-0 pointer-events-none"
-                width={positioned.width}
-                height={positioned.height}
+                width={positioned.width + 64}
+                height={positioned.height + 64}
               >
                 {siteFlow?.connections.map((edge, index) => {
                   const from = positioned.nodes.find((n) => n.id === edge.from)
                   const to = positioned.nodes.find((n) => n.id === edge.to)
                   if (!from || !to) return null
 
-                  const fromX = from.x + 140
-                  const fromY = from.y + 48
-                  const toX = to.x + 20
-                  const toY = to.y + 48
+                  const fromX = from.x + 32 + 160
+                  const fromY = from.y + 32 + 56
+                  const toX = to.x + 32 + 20
+                  const toY = to.y + 32 + 56
 
-                  const midX = (fromX + toX) / 2
+                  const controlOffset = Math.abs(toX - fromX) * 0.3
 
-                  const path = `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`
+                  const path = `M ${fromX} ${fromY} C ${fromX + controlOffset} ${fromY}, ${toX - controlOffset} ${toY}, ${toX} ${toY}`
 
                   return (
                     <g key={index}>
+                      <defs>
+                        <linearGradient id={`gradient-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="rgb(251 191 36)" stopOpacity="0.3" />
+                          <stop offset="100%" stopColor="rgb(251 191 36)" stopOpacity="0.5" />
+                        </linearGradient>
+                      </defs>
                       <path
                         d={path}
                         fill="none"
-                        className="stroke-amber-gold/40"
-                        strokeWidth={1.2}
+                        stroke={`url(#gradient-${index})`}
+                        strokeWidth={2}
+                        className="drop-shadow-sm"
                       />
-                      <circle cx={toX} cy={toY} r={2} className="fill-amber-gold/70" />
+                      <circle cx={toX} cy={toY} r={3} className="fill-amber-gold/80 drop-shadow-sm" />
                     </g>
                   )
                 })}
@@ -190,34 +218,35 @@ const SiteFlowVisualizer = forwardRef<SiteFlowHandle, SiteFlowVisualizerProps>(
               {positioned.nodes.map((node) => (
                 <div
                   key={node.id}
-                  className="absolute w-60 rounded-lg border bg-dark-card shadow-sm border-divider/70 hover:border-amber-gold/80 transition-colors"
+                  className="absolute rounded-xl border bg-gradient-to-br from-dark-card to-dark-surface/80 shadow-lg border-divider/50 hover:border-amber-gold/60 hover:shadow-xl transition-all duration-200 group"
                   style={{
-                    left: node.x,
-                    top: node.y,
+                    left: node.x + 32,
+                    top: node.y + 32,
+                    width: '280px',
                   }}
                 >
-                  <div className="px-3.5 py-2.5 border-b border-divider/60 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-md bg-amber-gold/15 flex items-center justify-center text-[0.65rem] font-semibold text-amber-gold">
+                  <div className="px-4 py-3 border-b border-divider/40 bg-dark-surface/30 flex items-center justify-between gap-3 rounded-t-xl">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-gold/20 to-amber-gold/10 flex items-center justify-center text-xs font-bold text-amber-gold shadow-sm flex-shrink-0">
                         {node.level ?? 0}
                       </div>
-                      <div className="truncate">
-                        <div className="text-xs font-semibold text-charcoal truncate">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-heading font-semibold text-charcoal truncate">
                           {node.name}
                         </div>
-                        <div className="text-[0.65rem] text-mid-grey truncate">
+                        <div className="text-[0.7rem] text-mid-grey/70 truncate mt-0.5">
                           #{node.id}
                         </div>
                       </div>
                     </div>
                     {node.isParent && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-gold/10 text-[0.6rem] text-amber-gold font-medium">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gradient-to-r from-amber-gold/15 to-amber-gold/10 text-[0.65rem] text-amber-gold font-semibold border border-amber-gold/20 flex-shrink-0">
                         Hub
                       </span>
                     )}
                   </div>
                   {node.description && (
-                    <div className="px-3.5 py-2 text-[0.7rem] text-mid-grey leading-snug">
+                    <div className="px-4 py-3 text-[0.75rem] text-mid-grey leading-relaxed">
                       {node.description}
                     </div>
                   )}
