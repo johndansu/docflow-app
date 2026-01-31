@@ -402,7 +402,7 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
     if (homepageNode) {
       const nodeId = '2'
       const nodeName = typeof homepageNode === 'string' ? homepageNode : homepageNode.name
-      const nodeType = typeof homepageNode === 'string' ? 'page' as const : homepageNode.type
+      const nodeType: SiteFlowNode['type'] = typeof homepageNode === 'string' ? 'page' : (homepageNode.type as SiteFlowNode['type'])
       
       workflowNodes.push({
         id: nodeId,
@@ -412,7 +412,7 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
         x: 400, // Fixed position for Homepage
         y: 100, // Fixed position for Homepage
         status: 'active',
-        color: COLORS[nodeType] || COLORS.page
+        color: COLORS[nodeType as keyof typeof COLORS] || COLORS.page
       })
     }
     
@@ -431,7 +431,7 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
       const yPosition = 100 + (row * (rowSpacing + 20))   // Same row level as Homepage
       
       const nodeName = typeof node === 'string' ? node : node.name
-      const nodeType = typeof node === 'string' ? 'page' as const : node.type
+      const nodeType: SiteFlowNode['type'] = typeof node === 'string' ? 'page' : (node.type as SiteFlowNode['type'])
       
       workflowNodes.push({
         id: nodeId,
@@ -441,7 +441,7 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
         x: xPosition,
         y: yPosition,
         status: 'active',
-        color: COLORS[nodeType] || COLORS.page
+        color: COLORS[nodeType as keyof typeof COLORS] || COLORS.page
       })
     })
     
@@ -742,91 +742,6 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
       (document as any).webkitExitFullscreen?.() ||
       (document as any).msExitFullscreen?.()
     }
-  }
-
-  const renderConnection = (connection: SiteFlowConnection, index: number) => {
-    const fromNode = nodes.find(n => n.id === connection.from)
-    const toNode = nodes.find(n => n.id === connection.to)
-    
-    if (!fromNode || !toNode) return null
-    
-    const fromX = fromNode.x + getNodeWidth(fromNode.name, fromNode.description) / 2
-    const fromY = fromNode.y + NODE_HEIGHT / 2
-    const toX = toNode.x + getNodeWidth(toNode.name, toNode.description) / 2
-    const toY = toNode.y + NODE_HEIGHT / 2
-    
-    // Get the correct color based on connection type
-    let connectionColor = fromNode.color || COLORS.action
-    if (connection.type === 'failure') {
-      connectionColor = '#EF4444' // Red for failure
-    } else if (connection.type === 'conditional') {
-      connectionColor = '#F59E0B' // Amber for conditional
-    }
-    
-    // Create smooth connection path
-    let path = ''
-    
-    // Determine if connection is horizontal or vertical
-    const horizontalDistance = Math.abs(toX - fromX)
-    const verticalDistance = Math.abs(toY - fromY)
-    
-    if (horizontalDistance > verticalDistance) {
-      // Mostly horizontal connection
-      const midX = fromX + (toX - fromX) / 2
-      path = `M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`
-    } else {
-      // Mostly vertical connection
-      const midY = fromY + (toY - fromY) / 2
-      path = `M ${fromX} ${fromY} C ${fromX} ${midY}, ${toX} ${midY}, ${toX} ${toY}`
-    }
-    
-    return (
-      <g key={index}>
-        <defs>
-          <marker
-            id={`arrowhead-${index}`}
-            markerWidth="10"
-            markerHeight="10"
-            refX="9"
-            refY="3"
-            orient="auto"
-          >
-            <polygon
-              points="0 0, 10 3, 0 6"
-              fill={connectionColor}
-            />
-          </marker>
-        </defs>
-        
-        {/* Connection line */}
-        <path
-          d={path}
-          fill="none"
-          stroke={connectionColor}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          markerEnd={`url(#arrowhead-${index})`}
-          className="transition-all duration-200"
-          opacity="0.8"
-        />
-        
-        {/* Animated flow dots */}
-        <circle r="4" fill={connectionColor} opacity="0.9">
-          <animateMotion dur="2.5s" repeatCount="indefinite" path={path} />
-          <animate attributeName="opacity" values="0.9;0.4;0.9" dur="2.5s" repeatCount="indefinite" />
-        </circle>
-        
-        <circle r="2.5" fill={connectionColor} opacity="0.7">
-          <animateMotion dur="2.5s" repeatCount="indefinite" path={path} begin="0.8s" />
-          <animate attributeName="opacity" values="0.7;0.3;0.7" dur="2.5s" repeatCount="indefinite" begin="0.8s" />
-        </circle>
-        
-        <circle r="1.5" fill={connectionColor} opacity="0.5">
-          <animateMotion dur="2.5s" repeatCount="indefinite" path={path} begin="1.6s" />
-          <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2.5s" repeatCount="indefinite" begin="1.6s" />
-        </circle>
-      </g>
-    )
   }
 
   if (isGenerating) {

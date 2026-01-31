@@ -8,8 +8,8 @@ import SkeletonLoader from '../components/UI/SkeletonLoader'
 const HomePage = () => {
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<'date' | 'name' | 'type'>('date')
-  const [filterType, setFilterType] = useState<string>('all')
+  const [sortBy] = useState<'date' | 'name' | 'type'>('date')
+  const [filterType] = useState<string>('all')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -69,8 +69,6 @@ const HomePage = () => {
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       }
     })
-
-  const projectTypes = ['all', ...Array.from(new Set(projects.map(p => p.type)))]
 
   return (
     <div className="min-h-screen bg-dark-surface">

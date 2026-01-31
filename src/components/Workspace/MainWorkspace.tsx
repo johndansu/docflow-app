@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DocumentViewer from '../DocumentGeneration/DocumentViewer'
-import SiteFlowVisualizer, { type SiteFlowHandle } from '../SiteFlow/SiteFlowVisualizer'
+import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
 import { storage, type SiteFlowData } from '../../utils/storage'
 import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories, generateSpecs } from '../../utils/contentGenerator'
@@ -20,7 +20,10 @@ const MainWorkspace = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [siteFlowData, setSiteFlowData] = useState<SiteFlowData | null>(null)
-  const siteFlowRef = useRef<SiteFlowHandle>(null)
+  const handleSiteFlowChange = (flow: SiteFlowData) => {
+    setSiteFlowData(flow)
+  }
+  const siteFlowRef = useRef<any>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -292,7 +295,7 @@ const MainWorkspace = () => {
               appDescription={appDescription}
               prdContent={generatedDocs.find(doc => doc.type === 'PRD')?.content}
               projectName={projectName}
-              onSiteFlowChange={setSiteFlowData}
+              onSiteFlowChange={handleSiteFlowChange}
             />
           </div>
         </div>
