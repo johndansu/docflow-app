@@ -22,49 +22,90 @@ const COMMAND_PREFIXES = [
 ]
 
 const STOP_WORDS = new Set([
-  'app','application','platform','tool','tools','solution','project','product','service','software','system','build','create','make','develop','design','for','with','that','this','from','into','and','the','a','an','to','of','in','on','my','our','their','users','user','people','team','teams','help','need','like'
+  'app','application','platform','tool','tools','solution','project','product','service','software','system','build','create','make','develop','design','for','with','that','this','from','into','and','the','a','an','to','of','in','on','my','our','their','users','user','people','team','teams','help','need','like','i','want','would','like','please','me','am','looking','let','s'
 ])
 
 const SUFFIXES = ['Hub', 'Flow', 'Deck', 'Nest', 'Suite', 'Portal', 'Loop', 'Forge', 'Atlas', 'Pulse', 'Space', 'Wave', 'Pilot', 'Core', 'Studio', 'Works']
 
-const THEME_DICTIONARY: { keywords: string[]; names: string[] }[] = [
-  {
-    keywords: ['shop', 'shopping', 'store', 'retail', 'commerce', 'cart', 'checkout', 'market', 'boutique'],
-    names: ['Cartova', 'Mercana', 'Shopora', 'Bazilio', 'Checkoutly', 'MarketFlux', 'Trolleyx', 'Retailyn', 'Bazaario', 'Cartstream']
-  },
-  {
-    keywords: ['kid', 'kids', 'child', 'children', 'youth', 'play', 'toy', 'toddler', 'school', 'classroom'],
-    names: ['SproutSpark', 'WonderNest', 'Playloom', 'PebbleJoy', 'MiniOrbit', 'BrightBud', 'Kidora', 'Lilypad Labs', 'JoyMint', 'SprigLane']
-  },
-  {
-    keywords: ['note', 'notes', 'notebook', 'journal', 'doc', 'document', 'writing', 'write', 'scribe', 'memo'],
-    names: ['Quillcraft', 'Draftline', 'Scriptoria', 'Pageforge', 'MemoNest', 'NoteLoom', 'Scribeon', 'Journova', 'Draftsmith', 'Logium']
-  },
-  {
-    keywords: ['ai', 'agent', 'automation', 'assistant', 'bot', 'intelligence', 'machine'],
-    names: ['Aionics', 'Agentix', 'Automata Lab', 'BotLoop', 'SynthMind', 'CogniFlow', 'NeuroNest', 'ThinkBeam', 'LogicPulse', 'Promptify']
-  },
-  {
-    keywords: ['finance', 'budget', 'accounting', 'money', 'bank', 'crypto', 'investment', 'invoice'],
-    names: ['Ledgerly', 'Mintwave', 'Finova', 'Coinspan', 'Valorix', 'Fundron', 'Cashmere Labs', 'Budgetry', 'Paycraft', 'Accrualis']
-  },
-  {
-    keywords: ['health', 'fitness', 'medical', 'wellness', 'clinic', 'care', 'hospital', 'therapy', 'med'],
-    names: ['Vitalon', 'Pulseforge', 'Mediora', 'Wellnest', 'Fitflare', 'Healcraft', 'TheraBeam', 'Clinique Labs', 'Wellspring', 'Carenova']
-  },
-  {
-    keywords: ['education', 'learn', 'learning', 'school', 'student', 'course', 'curriculum', 'teach', 'lesson'],
-    names: ['Learnova', 'Campusly', 'Eduverse', 'ScholarAxis', 'Classloom', 'Tutorium', 'AcademiaX', 'Lessonary', 'Teachlane', 'MentorLab']
-  },
-  {
-    keywords: ['travel', 'trip', 'tour', 'journey', 'flight', 'hotel', 'tourism', 'vacation'],
-    names: ['Voyagr', 'Tripcade', 'Traveline', 'Jetstream', 'Roamara', 'Nomadix', 'Globetrail', 'AtlasLane', 'Itinero', 'Excursion Labs']
-  },
-  {
-    keywords: ['music', 'audio', 'sound', 'song', 'podcast', 'radio'],
-    names: ['Audiary', 'Soundwave', 'TuneForge', 'Melodic', 'Podloom', 'Rhythmo', 'Harmonyx', 'BeatFolio', 'Chordline', 'Resonata']
+const generateDynamicName = async (description: string, keywords: string[]): Promise<string> => {
+  // Use AI to generate unique names based on content
+  if (isAIAvailable()) {
+    try {
+      const safeKeywords = Array.isArray(keywords) ? keywords.filter(k => k && typeof k === 'string') : []
+      const safeDescription = typeof description === 'string' ? description : ''
+      
+      const systemPrompt = `You are a creative naming expert. Generate unique, memorable, and professional project names based on the provided description and keywords. 
+
+Analyze the project description and generate names that clearly reflect the project's actual purpose. For example:
+- A project management tool → names like "TaskFlow", "ProjectHub", "WorkSync"
+- A social media app → names like "ConnectSphere", "SocialPulse", "LinkUp"
+- A document generator → names like "DocCraft", "ContentFlow", "WriteGen"
+
+AVOID generic or unrelated names that don't connect to the project's function.`
+
+      const userPrompt = `Generate 5 unique, meaningful project names for this specific project:
+
+**Project Description:** ${safeDescription.substring(0, 500)}
+**Key Purpose:** ${Array.isArray(safeKeywords) && safeKeywords.length > 0 ? safeKeywords.slice(0, 5).join(', ') : 'project'}
+
+**Requirements:**
+- Names must directly relate to what this project actually does
+- Each name should clearly communicate the project's purpose
+- Use modern naming conventions (portmanteaus, compound words, creative blends)
+- Names should be brandable and easy to pronounce
+- Consider the target audience and industry context
+
+Generate 5 meaningful names, each on a new line, without numbering or formatting.`
+
+      const result = await generateWithAI({
+        systemPrompt,
+        userPrompt,
+        temperature: 0.9, // Higher creativity
+        maxTokens: 200,
+      })
+
+      // Parse the AI response and pick the first valid name
+      const names = result.split('\n')
+        .map(name => name.replace(/^\d+\.?\s*/, '').trim()) // Remove numbering
+        .filter(name => name.length > 2 && name.length < 50)
+        .filter(name => !name.toLowerCase().includes('project') && !name.toLowerCase().includes('app'))
+      
+      if (names.length > 0 && names[0]) {
+        return names[0].split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ')
+      }
+    } catch (error) {
+      console.warn('AI name generation failed, using fallback:', error)
+    }
   }
-]
+
+  // Fallback: Dynamic name generation without AI
+  const generateFallbackName = (keywords: string[]): string => {
+    const safeKeywords = Array.isArray(keywords) ? keywords.filter(k => k && typeof k === 'string') : []
+    const prefixes = ['Nova', 'Zen', 'Echo', 'Flow', 'Pulse', 'Core', 'Link', 'Sync', 'Hub', 'Peak', 'Grid', 'Wave', 'Beam', 'Spark', 'Fusion', 'Nexus', 'Vertex', 'Cortex', 'Matrix', 'Quantum']
+    const suffixes = ['ify', 'flow', 'hub', 'link', 'sync', 'core', 'pulse', 'grid', 'wave', 'beam', 'spark', 'lab', 'works', 'studio', 'space', 'zone', 'net', 'tech', 'systems', 'solutions']
+    const concepts = ['Digital', 'Smart', 'Pro', 'Max', 'Ultra', 'Meta', 'Alpha', 'Omega', 'Prime', 'Elite', 'Next', 'Future', 'Quantum', 'Cyber', 'Tech', 'Info', 'Data', 'Cloud', 'Web', 'App']
+    
+    // Create a seed from keywords for consistency (with safety checks)
+    const keywordString = safeKeywords.length > 0 ? safeKeywords.join('') : 'default'
+    const seed = keywordString.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+    
+    // Generate different name patterns
+    const patterns = [
+      () => `${prefixes[seed % prefixes.length]}${suffixes[(seed + 1) % suffixes.length]}`,
+      () => `${concepts[seed % concepts.length]} ${prefixes[(seed + 2) % prefixes.length]}`,
+      () => `${prefixes[seed % prefixes.length]} ${safeKeywords[0]?.charAt(0).toUpperCase() + safeKeywords[0]?.slice(1, 4) || 'Core'}`,
+      () => `${safeKeywords[0]?.charAt(0).toUpperCase() || 'N'}${prefixes[(seed + 3) % prefixes.length]}${suffixes[(seed + 4) % suffixes.length]}`,
+      () => `${prefixes[seed % prefixes.length]}${safeKeywords[0]?.slice(0, 3).toUpperCase() || 'Tech'}`
+    ]
+    
+    const patternIndex = seed % patterns.length
+    return patterns[patternIndex]()
+  }
+  
+  return generateFallbackName(keywords)
+}
 
 const GLOBAL_SUFFIXES = ['Labs', 'Studio', 'Works', 'Forge', 'Pulse', 'Orbit', 'Realm', 'Collective', 'Verse', 'Matrix', 'Nest', 'Beacon', 'Fabric', 'Harbor', 'Vista']
 
@@ -175,22 +216,24 @@ const extractExplicitName = (description: string): string | null => {
     return null
   }
 
-  const selected = candidates[0].split(/\s+/).map(toTitleCase).join(' ')
+  const selected = candidates[0] ? candidates[0].split(/\s+/).map(toTitleCase).join(' ') : 'Untitled Project'
   return selected.substring(0, 60)
 }
 
 const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): string => {
-  if (keywords.length === 0) {
+  if (!keywords || keywords.length === 0) {
     return 'Untitled Project'
   }
 
-  const seed = keywords.join('').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  // Ensure keywords is a valid array with strings
+  const safeKeywords = keywords.filter(k => k && typeof k === 'string')
+  if (safeKeywords.length === 0) {
+    return 'Untitled Project'
+  }
 
-  const matchedThemes = THEME_DICTIONARY.filter(theme =>
-    theme.keywords.some(key => keywords.includes(key))
-  )
+  const seed = safeKeywords.join('').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)
 
-  const transformed = keywords.map(transformKeyword)
+  const transformed = safeKeywords.map(transformKeyword)
   const uniqueAnchors = transformed
     .filter(Boolean)
     .filter((value, index, arr) => arr.indexOf(value) === index)
@@ -199,35 +242,7 @@ const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): strin
   const safeAnchors = uniqueAnchors.filter(word => !rawWords.has(word.toLowerCase()))
   const anchors = safeAnchors.length > 0 ? safeAnchors : uniqueAnchors
 
-  if (matchedThemes.length > 0) {
-    const primaryTheme = matchedThemes[0]
-    const themedName = pickFromList(primaryTheme.names, seed)
-    const secondaryTheme = matchedThemes[1]
-    const secondaryName = secondaryTheme ? pickFromList(secondaryTheme.names, seed + themedName.length) : null
-
-    const anchorPrimary = anchors[0] || transformKeyword(primaryTheme.keywords[0])
-    const anchorSecondary = anchors[1] || (secondaryName ? secondaryName.split(/\s+/)[0] : pickFromList(GLOBAL_SUFFIXES, seed + anchorPrimary.length))
-
-    const pieces = [anchorPrimary, themedName]
-    if (secondaryName && secondaryName !== themedName) {
-      pieces.push(secondaryName)
-    } else if (anchorSecondary && anchorSecondary !== anchorPrimary && anchorSecondary !== themedName) {
-      pieces.push(anchorSecondary)
-    }
-
-    const combined = pieces
-      .map(part => part.replace(/\b(App|Application|Platform|Project)\b/gi, '').trim())
-      .filter(part => part.length > 1)
-
-    const sanitized = combined
-      .filter((value, index, arr) => value && arr.indexOf(value) === index)
-      .filter(part => !rawWords.has(part.toLowerCase()))
-
-    const finalParts = sanitized.length >= 2 ? sanitized : combined
-    const finalName = finalParts.join(' ').replace(/\s+/g, ' ').trim()
-    return finalName.length > 0 ? finalName : `${themedName} ${pickFromList(GLOBAL_SUFFIXES, seed)}`.trim()
-  }
-
+  // Use the new dynamic naming approach instead of theme dictionary
   const base = anchors[0] || pickFromList(SUFFIXES, seed + 3)
   const bonus = anchors[1]
   const suffix = pickFromList(GLOBAL_SUFFIXES, seed + (anchors[0]?.length ?? 0))
@@ -257,7 +272,7 @@ const buildNameFromKeywords = (keywords: string[], rawWords: Set<string>): strin
   return fallback || 'Untitled Project'
 }
 
-const suggestProjectName = (description: string): string => {
+const suggestProjectName = async (description: string): Promise<string> => {
   if (!description || !description.trim()) {
     return 'Untitled Project'
   }
@@ -283,13 +298,24 @@ const suggestProjectName = (description: string): string => {
   const rawWordSet = new Set<string>()
 
   cleanedWords.forEach(word => {
-    rawWordSet.add(word)
-    if (!STOP_WORDS.has(word) && !keywords.includes(word)) {
-      keywords.push(word)
+    if (word && typeof word === 'string') {
+      rawWordSet.add(word)
+      if (!STOP_WORDS.has(word) && !keywords.includes(word)) {
+        keywords.push(word)
+      }
     }
   })
 
+  console.log('🔍 Keyword extraction debug:', {
+    originalDescription: description.substring(0, 100),
+    cleanedWords: cleanedWords.slice(0, 10),
+    keywords: keywords.slice(0, 10),
+    keywordsCount: keywords.length
+  })
+
+  // Check if we have actual keywords (not just the fallback)
   if (keywords.length === 0) {
+    console.log('⚠️ No keywords found, using first sentence fallback')
     const fallback = firstSentence
       .split(/\s+/)
       .filter(Boolean)
@@ -298,22 +324,43 @@ const suggestProjectName = (description: string): string => {
     return fallback || 'Untitled Project'
   }
 
-  const name = buildNameFromKeywords(keywords.slice(0, 6), rawWordSet)
+  // Use the actual keywords for naming
+  const safeKeywords = keywords
+
+  // Use the new dynamic naming system
+  try {
+    const dynamicName = await generateDynamicName(description, safeKeywords)
+    if (dynamicName && dynamicName !== 'Untitled Project') {
+      return dynamicName.substring(0, 60)
+    }
+  } catch (error) {
+    console.warn('Dynamic naming failed, using fallback:', error)
+  }
+
+  // Fallback to the old system if dynamic naming fails
+  const name = buildNameFromKeywords(safeKeywords.slice(0, 6), rawWordSet)
   return name.substring(0, 60)
 }
 
-export const extractInfo = (description: string): ExtractedInfo => {
-  const lines = description.split('\n').filter(l => l.trim())
-  const projectName = suggestProjectName(description).substring(0, 60)
+export const extractInfo = async (description: string): Promise<ExtractedInfo> => {
+  // Ensure description is valid
+  if (!description || typeof description !== 'string') {
+    description = ''
+  }
+  
+  const lines = description.split('\n').filter(l => l && l.trim())
+  const projectName = await suggestProjectName(description)
   
   const descriptionLower = description.toLowerCase()
   
   // Extract features (lines starting with -, *, or containing keywords)
   const features: string[] = []
   lines.forEach(line => {
-    const trimmed = line.trim()
-    if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•')) {
-      features.push(trimmed.substring(1).trim())
+    if (line && typeof line === 'string') {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•')) {
+        features.push(trimmed.substring(1).trim())
+      }
     }
   })
   
@@ -332,7 +379,7 @@ export const extractInfo = (description: string): ExtractedInfo => {
   ]
   
   featureKeywords.forEach(keyword => {
-    if (descriptionLower.includes(keyword) && !features.some(f => f.toLowerCase().includes(keyword))) {
+    if (descriptionLower.includes(keyword) && !features.some(f => f && f.toLowerCase().includes(keyword))) {
       features.push(keyword.charAt(0).toUpperCase() + keyword.slice(1).replace(/\b\w/g, l => l.toUpperCase()))
     }
   })
@@ -348,9 +395,9 @@ export const extractInfo = (description: string): ExtractedInfo => {
   userPatterns.forEach(pattern => {
     const matches = description.match(pattern)
     if (matches) {
-      matches.forEach(match => {
-        const users = match.replace(/^(?:for|target|users?|audience|customers?|clients?|used by|designed for)\s+(?:are|is|include|consist of|comprise|:)\s*/i, '').trim()
-        if (users && users.length > 3) {
+      matches.forEach((match: string) => {
+        const users = match.split(/[:]/).pop()?.trim()
+        if (users && users.length > 0 && !targetUsers.includes(users)) {
           targetUsers.push(users)
         }
       })
@@ -375,7 +422,7 @@ export const extractInfo = (description: string): ExtractedInfo => {
     const regex = new RegExp(`(?:${keyword}[^.]*?)([^.]+)`, 'gi')
     const matches = description.match(regex)
     if (matches) {
-      matches.forEach(match => {
+      matches.forEach((match: string) => {
         const problem = match.replace(new RegExp(`^.*?${keyword}\\s*:?\\s*`, 'i'), '').trim()
         if (problem && problem.length > 10) {
           problems.push(problem)
@@ -394,8 +441,8 @@ export const extractInfo = (description: string): ExtractedInfo => {
   goalPatterns.forEach(pattern => {
     const matches = description.match(pattern)
     if (matches) {
-      matches.forEach(match => {
-        const goal = match.replace(/^(?:goal|objective|aim|purpose|mission|to|aiming to|designed to)\s+(?:is|are|to)\s*/i, '').trim()
+      matches.forEach((match: string) => {
+        const goal = match.replace(/^(?:goal|objective|aim|purpose|mission|to|aiming to|designed to)\s+(?:is|are|to)?\s*/i, '').trim()
         if (goal && goal.length > 5) {
           goals.push(goal)
         }
@@ -403,14 +450,19 @@ export const extractInfo = (description: string): ExtractedInfo => {
     }
   })
   
+  // Default goals if none found
+  if (goals.length === 0) {
+    goals.push('Provide an effective solution for users', 'Improve user experience and productivity')
+  }
+  
   // Extract tech stack
   const techStack: string[] = []
   const techKeywords = [
-    'react', 'vue', 'angular', 'svelte',
-    'node', 'python', 'java', 'php', 'ruby', 'go', 'rust',
-    'mongodb', 'postgresql', 'mysql', 'sqlite', 'redis',
-    'aws', 'azure', 'gcp', 'docker', 'kubernetes',
-    'typescript', 'javascript', 'html', 'css'
+    'react', 'vue', 'angular', 'javascript', 'typescript',
+    'node', 'python', 'java', 'php', 'ruby',
+    'mongodb', 'postgresql', 'mysql', 'sqlite',
+    'aws', 'azure', 'google cloud', 'firebase',
+    'docker', 'kubernetes', 'redis', 'nginx'
   ]
   
   techKeywords.forEach(tech => {
@@ -419,12 +471,17 @@ export const extractInfo = (description: string): ExtractedInfo => {
     }
   })
   
+  // Default tech if none found
+  if (techStack.length === 0) {
+    techStack.push('React', 'Node.js', 'PostgreSQL')
+  }
+
   return {
     projectName,
-    features: features.length > 0 ? features.slice(0, 10) : ['Core functionality', 'User interface', 'Data management'],
-    targetUsers: targetUsers.slice(0, 5),
-    problems: problems.length > 0 ? problems.slice(0, 5) : ['User needs a better solution', 'Current solutions are inadequate'],
-    goals: goals.length > 0 ? goals.slice(0, 5) : ['Improve user experience', 'Solve key problems', 'Provide value'],
+    features: features.length > 0 ? features : ['User authentication', 'Dashboard interface', 'Data management'],
+    targetUsers: targetUsers.length > 0 ? targetUsers : ['End users'],
+    problems: problems.length > 0 ? problems : ['Current solutions are inefficient or inadequate'],
+    goals: goals.length > 0 ? goals : ['Create an intuitive and effective solution'],
     techStack: techStack.length > 0 ? techStack : ['Modern web technologies']
   }
 }
@@ -438,14 +495,14 @@ export const generatePRD = async (info: ExtractedInfo, description: string): Pro
       const systemPrompt = `You are an expert product manager. Generate comprehensive Product Requirements Documents (PRDs) that are well-structured, detailed, and professional. Always use proper markdown formatting with clear headings, bullet points, and organized sections.`
       const userPrompt = `Create a detailed Product Requirements Document for the following project:
 
-**Project Name:** ${info.projectName}
-**Description:** ${description}
+**Project Name:** ${info.projectName || 'Untitled Project'}
+**Description:** ${description || 'No description provided'}
 
-**Key Features:** ${info.features.join(', ')}
-**Target Users:** ${info.targetUsers.join(', ')}
-**Problems Solved:** ${info.problems.join(', ')}
-**Goals:** ${info.goals.join(', ')}
-**Tech Stack:** ${info.techStack.join(', ')}
+**Key Features:** ${Array.isArray(info.features) ? info.features.join(', ') : 'Core functionality'}
+**Target Users:** ${Array.isArray(info.targetUsers) ? info.targetUsers.join(', ') : 'End users'}
+**Problems Solved:** ${Array.isArray(info.problems) ? info.problems.join(', ') : 'User needs'}
+**Goals:** ${Array.isArray(info.goals) ? info.goals.join(', ') : 'Create value'}
+**Tech Stack:** ${Array.isArray(info.techStack) ? info.techStack.join(', ') : 'Modern technologies'}
 
 Generate a comprehensive PRD with the following structure:
 
@@ -513,18 +570,18 @@ Use proper markdown formatting with:
 ${description}
 
 ## 2. Problem Statement
-${info.problems.length > 0 
+${Array.isArray(info.problems) && info.problems.length > 0 
   ? info.problems.map(p => `- ${p}`).join('\n')
   : `Users need a solution that addresses their core needs efficiently and effectively.`}
 
 ## 3. Objectives
-${info.goals.map(g => `- ${g}`).join('\n')}
+${Array.isArray(info.goals) ? info.goals.map(g => `- ${g}`).join('\n') : '- Create an effective solution'}
 
 ## 4. Target Users
-${info.targetUsers.map(u => `- ${u}`).join('\n')}
+${Array.isArray(info.targetUsers) ? info.targetUsers.map(u => `- ${u}`).join('\n') : '- End users'}
 
 ## 5. Key Features
-${info.features.map(f => `- ${f}`).join('\n')}
+${Array.isArray(info.features) ? info.features.map(f => `- ${f}`).join('\n') : '- Core functionality'}
 
 ## 6. User Flow
 1. User lands on homepage/landing page
@@ -566,12 +623,12 @@ export const generateDesignPrompt = async (info: ExtractedInfo, description: str
       const systemPrompt = `You are an expert UX/UI designer. Generate detailed design prompts that help designers create beautiful, functional, and user-centered interfaces. Always use proper markdown formatting with clear sections and visual hierarchy.`
       const userPrompt = `Create a comprehensive design prompt for the following project:
 
-**Project Name:** ${info.projectName}
-**Description:** ${description}
+**Project Name:** ${info.projectName || 'Untitled Project'}
+**Description:** ${description || 'No description provided'}
 
-**Key Features:** ${info.features.join(', ')}
-**Target Users:** ${info.targetUsers.join(', ')}
-**Tech Stack:** ${info.techStack.join(', ')}
+**Key Features:** ${Array.isArray(info.features) ? info.features.join(', ') : 'Core functionality'}
+**Target Users:** ${Array.isArray(info.targetUsers) ? info.targetUsers.join(', ') : 'End users'}
+**Tech Stack:** ${Array.isArray(info.techStack) ? info.techStack.join(', ') : 'Modern technologies'}
 
 Generate a detailed design prompt with the following structure:
 
@@ -705,13 +762,13 @@ export const generateUserStories = async (info: ExtractedInfo, description: stri
       const systemPrompt = `You are an expert product manager and agile coach. Generate well-structured user stories with clear acceptance criteria that follow the "As a... I want... So that..." format. Always use proper markdown formatting with clear sections and organized lists.`
       const userPrompt = `Create detailed user stories for the following project:
 
-**Project Name:** ${info.projectName}
-**Description:** ${description}
+**Project Name:** ${info.projectName || 'Untitled Project'}
+**Description:** ${description || 'No description provided'}
 
-**Key Features:** ${info.features.join(', ')}
-**Target Users:** ${info.targetUsers.join(', ')}
-**Problems Solved:** ${info.problems.join(', ')}
-**Goals:** ${info.goals.join(', ')}
+**Key Features:** ${Array.isArray(info.features) ? info.features.join(', ') : 'Core functionality'}
+**Target Users:** ${Array.isArray(info.targetUsers) ? info.targetUsers.join(', ') : 'End users'}
+**Problems Solved:** ${Array.isArray(info.problems) ? info.problems.join(', ') : 'User needs'}
+**Goals:** ${Array.isArray(info.goals) ? info.goals.join(', ') : 'Create value'}
 
 Generate comprehensive user stories with the following structure:
 
@@ -777,17 +834,17 @@ ${description}
 
 ## User Stories
 
-${stories.join('\n\n')}
+${Array.isArray(stories) ? stories.join('\n\n') : '- User story placeholder'}
 
 ## Priority
 - **High Priority**: Core functionality that enables primary use cases
-  ${info.features.slice(0, 3).map(f => `  - ${f}`).join('\n')}
+  ${Array.isArray(info.features) ? info.features.slice(0, 3).map(f => `  - ${f}`).join('\n') : '- Core feature'}
   
 - **Medium Priority**: Enhanced features that improve user experience
-  ${info.features.slice(3, 6).map(f => `  - ${f}`).join('\n')}
+  ${Array.isArray(info.features) ? info.features.slice(3, 6).map(f => `  - ${f}`).join('\n') : '- Enhanced feature'}
   
 - **Low Priority**: Nice-to-have features for future iterations
-  ${info.features.slice(6, 9).map(f => `  - ${f}`).join('\n')}
+  ${Array.isArray(info.features) ? info.features.slice(6, 9).map(f => `  - ${f}`).join('\n') : '- Future feature'}
 
 ## Definition of Done
 - Feature is implemented and tested
@@ -804,12 +861,12 @@ export const generateSpecs = async (info: ExtractedInfo, description: string): P
       const systemPrompt = `You are an expert software architect and technical lead. Generate comprehensive technical specifications that are detailed, accurate, and implementation-ready. Always use proper markdown formatting with code blocks for technical details.`
       const userPrompt = `Create detailed technical specifications for the following project:
 
-**Project Name:** ${info.projectName}
-**Description:** ${description}
+**Project Name:** ${info.projectName || 'Untitled Project'}
+**Description:** ${description || 'No description provided'}
 
-**Key Features:** ${info.features.join(', ')}
-**Target Users:** ${info.targetUsers.join(', ')}
-**Tech Stack:** ${info.techStack.join(', ')}
+**Key Features:** ${Array.isArray(info.features) ? info.features.join(', ') : 'Core functionality'}
+**Target Users:** ${Array.isArray(info.targetUsers) ? info.targetUsers.join(', ') : 'End users'}
+**Tech Stack:** ${Array.isArray(info.techStack) ? info.techStack.join(', ') : 'Modern technologies'}
 
 Generate comprehensive technical specs with the following structure:
 

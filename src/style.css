@@ -3,13 +3,13 @@
 
 @theme {
   --color-amber-gold: #D9A441;
-  --color-light-neutral: #121212;
-  --color-charcoal: #E5E5E5;
+  --color-light-neutral: #0A0A0A;
+  --color-charcoal: #F3F4F6;
   --color-mid-grey: #9CA3AF;
   --color-deep-green: #3C6E47;
-  --color-divider: #2A2A2A;
-  --color-dark-card: #1E1E1E;
-  --color-dark-surface: #181818;
+  --color-divider: #374151;
+  --color-dark-card: #1F2937;
+  --color-dark-surface: #111827;
   
   --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -23,8 +23,8 @@
 @layer base {
   body {
     @apply bg-light-neutral text-charcoal font-body;
-    font-size: 15px;
-    line-height: 1.5;
+    font-size: 10px;
+    line-height: 1.4;
     letter-spacing: -0.011em;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
@@ -36,19 +36,19 @@
   }
   
   h1 {
-    @apply text-3xl;
+    @apply text-base;
     line-height: 1.2;
     font-weight: 700;
   }
   
   h2 {
-    @apply text-2xl;
+    @apply text-sm;
     line-height: 1.3;
     font-weight: 600;
   }
   
   h3 {
-    @apply text-xl;
+    @apply text-xs;
     line-height: 1.4;
     font-weight: 600;
   }
@@ -60,16 +60,53 @@
 
 @layer components {
   .card {
-    @apply bg-dark-card border border-divider rounded-lg p-4;
-    box-shadow: var(--shadow-card);
+    @apply bg-dark-card border border-divider rounded-lg p-3;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .card:hover {
+    @apply shadow-lg border-charcoal/30;
+    transform: translateY(-1px);
+  }
+  
+  .interactive-card {
+    @apply bg-dark-card border border-divider rounded-lg p-3 cursor-pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .interactive-card:hover {
+    @apply shadow-lg border-amber-gold/50;
+    transform: translateY(-1px);
   }
   
   .btn-primary {
-    @apply bg-amber-gold text-white px-4 py-2 rounded-lg font-medium hover:bg-amber-gold/90 transition-all shadow-md hover:shadow-lg;
+    @apply bg-amber-gold text-white px-2 py-1 rounded-md font-medium hover:bg-amber-gold/90 transition-all duration-200 shadow hover:shadow-lg transform hover:scale-105;
+    font-size: 10px;
+  }
+  
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+  
+  .btn-primary:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
   
   .btn-secondary {
-    @apply border border-divider text-charcoal px-4 py-2 rounded-lg font-medium hover:bg-dark-surface hover:border-divider transition-all;
+    @apply border border-divider text-charcoal px-2 py-1 rounded-md font-medium hover:bg-dark-surface hover:border-charcoal/50 transition-all duration-200;
+    font-size: 10px;
+  }
+  
+  .btn-secondary:active {
+    transform: scale(0.98);
+  }
+  
+  .btn-secondary:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   }
 }
 
@@ -84,51 +121,86 @@
   }
 }
 
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 164, 65, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 5px rgba(217, 164, 65, 0.1);
+  }
+}
+
 .animate-fade-in {
   animation: fade-in 0.6s ease-out forwards;
   opacity: 0;
 }
 
+.animate-slide-in {
+  animation: slide-in 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.glow-on-hover:hover {
+  animation: pulse-glow 2s infinite;
+}
+
 /* Markdown Content Styles */
 .markdown-content {
   @apply text-charcoal;
-  font-size: 15px;
-  line-height: 1.75;
+  font-size: 16px;
+  line-height: 1.7;
+  font-weight: 400;
 }
 
 .markdown-content h1 {
-  @apply text-3xl font-heading font-bold text-charcoal mt-8 mb-4 pb-2 border-b border-divider/50;
-  line-height: 1.2;
+  @apply text-2xl sm:text-3xl font-heading font-bold text-charcoal mt-6 mb-4 pb-3 border-b border-divider/30;
+  line-height: 1.3;
+  letter-spacing: -0.025em;
 }
 
 .markdown-content h2 {
-  @apply text-2xl font-heading font-semibold text-charcoal mt-7 mb-3;
-  line-height: 1.3;
+  @apply text-lg sm:text-xl font-heading font-semibold text-charcoal mt-5 mb-3;
+  line-height: 1.4;
+  letter-spacing: -0.025em;
 }
 
 .markdown-content h3 {
-  @apply text-xl font-heading font-semibold text-charcoal mt-6 mb-2.5;
-  line-height: 1.4;
+  @apply text-base sm:text-lg font-heading font-semibold text-charcoal mt-4 mb-2;
+  line-height: 1.5;
+  letter-spacing: -0.025em;
 }
 
 .markdown-content h4 {
-  @apply text-lg font-heading font-semibold text-charcoal mt-5 mb-2;
+  @apply text-lg sm:text-xl font-heading font-semibold text-charcoal mt-5 mb-3;
+  letter-spacing: -0.025em;
 }
 
 .markdown-content h5,
 .markdown-content h6 {
-  @apply text-base font-heading font-semibold text-charcoal mt-4 mb-2;
+  @apply text-base sm:text-lg font-heading font-semibold text-charcoal mt-4 mb-2;
+  letter-spacing: -0.025em;
 }
 
 .markdown-content p {
-  @apply mb-4 text-charcoal/90;
-  line-height: 1.75;
+  @apply mb-5 text-charcoal/90 leading-relaxed;
+  line-height: 1.7;
 }
 
 .markdown-content ul,
 .markdown-content ol {
-  @apply mb-4 ml-6;
-  line-height: 1.75;
+  @apply mb-5 ml-6;
+  line-height: 1.7;
 }
 
 .markdown-content ul {
@@ -140,7 +212,7 @@
 }
 
 .markdown-content li {
-  @apply mb-2 text-charcoal/90;
+  @apply mb-2 text-charcoal/90 leading-relaxed;
 }
 
 .markdown-content li > p {
@@ -153,46 +225,56 @@
 }
 
 .markdown-content blockquote {
-  @apply border-l-4 border-amber-gold/50 pl-4 py-2 my-4 italic text-mid-grey bg-dark-surface/30 rounded-r;
+  @apply border-l-4 border-amber-gold/50 pl-6 py-3 my-6 italic text-mid-grey bg-dark-surface/30 rounded-r-lg;
+  font-size: 0.95em;
+  line-height: 1.6;
 }
 
 .markdown-content code {
-  @apply bg-dark-surface text-amber-gold px-1.5 py-0.5 rounded text-sm font-mono;
+  @apply bg-dark-surface text-amber-gold px-2 py-1 rounded-lg text-sm font-mono;
   font-size: 0.9em;
+  font-weight: 500;
 }
 
 .markdown-content pre {
-  @apply bg-dark-surface border border-divider/50 rounded-lg p-4 my-4 overflow-x-auto;
+  @apply bg-dark-surface border border-divider/50 rounded-xl p-5 my-6 overflow-x-auto;
+  font-size: 0.875em;
 }
 
 .markdown-content pre code {
   @apply bg-transparent text-charcoal p-0;
-  font-size: 0.875em;
+  font-size: 1em;
   line-height: 1.6;
+  font-weight: 400;
 }
 
 .markdown-content a {
-  @apply text-amber-gold hover:text-amber-gold/80 underline;
+  @apply text-amber-gold hover:text-amber-gold/80 underline underline-offset-2 decoration-1 hover:decoration-2 transition-all duration-200;
+  font-weight: 500;
 }
 
 .markdown-content table {
-  @apply w-full border-collapse my-4;
+  @apply w-full border-collapse my-6 rounded-xl overflow-hidden;
+  font-size: 0.95em;
 }
 
 .markdown-content th {
-  @apply bg-dark-surface border border-divider/50 px-4 py-2 text-left font-semibold text-charcoal;
+  @apply bg-dark-surface border-b border-divider/50 px-4 py-3 text-left font-semibold text-charcoal;
+  font-weight: 600;
 }
 
 .markdown-content td {
-  @apply border border-divider/50 px-4 py-2 text-charcoal/90;
+  @apply border-b border-divider/30 px-4 py-3 text-charcoal/90;
 }
 
 .markdown-content hr {
-  @apply border-divider my-6;
+  @apply border-divider my-8;
+  opacity: 0.5;
 }
 
 .markdown-content strong {
   @apply font-semibold text-charcoal;
+  font-weight: 600;
 }
 
 .markdown-content em {
@@ -200,7 +282,7 @@
 }
 
 .markdown-content img {
-  @apply max-w-full rounded-lg my-4;
+  @apply max-w-full rounded-xl my-6 shadow-lg;
 }
 
 /* Custom Scrollbar Styles */

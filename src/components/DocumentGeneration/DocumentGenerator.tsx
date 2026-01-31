@@ -32,7 +32,7 @@ const DocumentGenerator = ({ onClose, isStandalone = false, onProjectCreated }: 
     if (!input.trim() || !documentType) return
 
     setIsGenerating(true)
-    const info = extractInfo(input)
+    const info = await extractInfo(input)
     setProjectName(info.projectName)
     
     try {

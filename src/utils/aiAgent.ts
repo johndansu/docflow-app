@@ -40,11 +40,22 @@ class AIAgent {
    * Generate content using AI
    */
   async generateContent(prompt: AIPrompt): Promise<string> {
+    console.log('🔍 AI Agent Debug - Starting generation...', {
+      hasConfig: !!this.config,
+      isInitialized: this.isInitialized(),
+      provider: this.config?.provider,
+      apiKeyLength: this.config?.apiKey?.length || 0,
+      apiKeyPrefix: this.config?.apiKey ? `${this.config.apiKey.substring(0, 10)}...` : 'none'
+    })
+
     if (!this.config || !this.isInitialized()) {
-      throw new Error('AI Agent not initialized. Please configure your API key in environment variables.')
+      const error = 'AI Agent not initialized. Please configure your API key in environment variables.'
+      console.error('❌ AI Agent Debug - Not initialized:', { config: this.config })
+      throw new Error(error)
     }
 
     try {
+      console.log('🚀 AI Agent Debug - Calling provider:', this.config.provider)
       switch (this.config.provider) {
         case 'openai':
           return await this.generateWithOpenAI(prompt)
@@ -64,7 +75,16 @@ class AIAgent {
           throw new Error(`Unsupported provider: ${this.config.provider}`)
       }
     } catch (error) {
-      console.error('AI generation error:', error)
+      console.error('❌ AI generation error:', error)
+      console.error('❌ Full error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        config: {
+          provider: this.config?.provider,
+          hasApiKey: !!this.config?.apiKey,
+          apiKeyLength: this.config?.apiKey?.length || 0
+        }
+      })
       throw new Error(
         error instanceof Error 
           ? `AI generation failed: ${error.message}` 
@@ -168,24 +188,42 @@ class AIAgent {
 
     const model = this.config.model || 'llama-3.3-70b-versatile'
     
-    console.log('🚀 Calling Groq API...', { model, maxTokens: prompt.maxTokens })
+    console.log('🚀 Calling Groq API...', { 
+      model, 
+      maxTokens: prompt.maxTokens,
+      apiKeyLength: this.config.apiKey.length,
+      apiKeyPrefix: this.config.apiKey.substring(0, 10) + '...'
+    })
     
     try {
+      const requestBody = {
+        model,
+        messages: [
+          { role: 'system', content: prompt.systemPrompt },
+          { role: 'user', content: prompt.userPrompt },
+        ],
+        temperature: prompt.temperature ?? 0.7,
+        max_tokens: prompt.maxTokens ?? 2000,
+      }
+
+      console.log('📤 Groq Request Body:', {
+        ...requestBody,
+        messages: requestBody.messages.map(m => ({ role: m.role, contentLength: m.content.length }))
+      })
+
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.config.apiKey}`,
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: prompt.systemPrompt },
-            { role: 'user', content: prompt.userPrompt },
-          ],
-          temperature: prompt.temperature ?? 0.7,
-          max_tokens: prompt.maxTokens ?? 2000,
-        }),
+        body: JSON.stringify(requestBody),
+      })
+
+      console.log('📥 Groq Response Status:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
       })
 
       if (!response.ok) {
@@ -196,27 +234,46 @@ class AIAgent {
         if (errorMessage.includes('decommissioned') || errorMessage.includes('no longer supported')) {
           errorMessage = `Model "${model}" is no longer available. Try setting VITE_AI_MODEL=llama-3.3-70b-versatile or llama-3.1-8b-instant in your .env file.`
         } else if (response.status === 401) {
-          errorMessage = 'Invalid Groq API key. Please check your API key in the .env file.'
+          errorMessage = 'Invalid Groq API key. Please check your API key in the .env file. Get a new key at https://console.groq.com/'
+        } else if (response.status === 429) {
+          errorMessage = 'Groq API rate limit exceeded. Please wait a moment and try again.'
         }
         
         console.error('❌ Groq API Error:', {
           status: response.status,
           statusText: response.statusText,
           error: errorData,
+          errorMessage
         })
         throw new Error(errorMessage)
       }
 
       const data = await response.json()
       const content = data.choices[0]?.message?.content || ''
+      
       console.log('✅ Groq API Success:', { 
         model: data.model,
         tokensUsed: data.usage?.total_tokens,
-        contentLength: content.length 
+        contentLength: content.length,
+        hasContent: !!content
       })
+
+      if (!content) {
+        console.error('❌ Groq returned empty content:', data)
+        throw new Error('Groq API returned empty content. Please try again.')
+      }
+
       return content
     } catch (error) {
-      console.error('❌ Groq API Request Failed:', error)
+      console.error('❌ Groq API Request Failed:', {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        config: {
+          hasApiKey: !!this.config?.apiKey,
+          apiKeyLength: this.config?.apiKey?.length,
+          model
+        }
+      })
       throw error
     }
   }

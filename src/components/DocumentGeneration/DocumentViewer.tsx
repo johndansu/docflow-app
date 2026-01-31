@@ -84,42 +84,39 @@ const DocumentViewer = ({ type, name, content, onExport }: DocumentViewerProps) 
   const config = getTypeConfig(type)
 
   return (
-    <div className="group relative bg-dark-card border border-divider/30 rounded-xl overflow-hidden hover:border-divider/60 transition-all duration-300 hover:shadow-xl hover:shadow-black/20">
-      {/* Gradient accent bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${config.gradient}`}></div>
+    <div className="group relative bg-dark-card/60 border border-divider/20 rounded-lg overflow-hidden hover:border-divider/40 transition-all duration-300 hover:shadow-lg hover:shadow-black/10">
+      {/* Minimal accent line */}
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${config.gradient}`}></div>
       
-      {/* Header */}
-      <div className="px-6 py-5 bg-gradient-to-br from-dark-surface/50 to-dark-card/30 border-b border-divider/20">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
-              <div className={`${config.iconBg} ${config.accentBorder} border rounded-xl p-2.5 flex-shrink-0 ${config.accent} transition-transform group-hover:scale-110`}>
-                {config.icon}
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-lg ${config.accentBg} ${config.accentBorder} border ${config.accent} backdrop-blur-sm`}>
-                  {type}
-                </span>
-              </div>
+      {/* Compact header */}
+      <div className="px-4 py-3 bg-gradient-to-br from-dark-surface/30 to-transparent border-b border-divider/10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`bg-dark-surface/10 border border-divider/30 rounded-lg p-2 flex-shrink-0 text-mid-grey transition-transform group-hover:scale-105`}>
+              {config.icon}
             </div>
-            <h3 className="text-xl font-heading font-bold text-charcoal leading-tight">{name}</h3>
+            <div className="flex-1 min-w-0">
+              <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-md bg-dark-surface/10 border border-divider/30 text-mid-grey backdrop-blur-sm`}>
+                {type}
+              </span>
+            </div>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="px-4 py-2 text-sm text-mid-grey hover:text-charcoal hover:bg-dark-surface/70 rounded-lg transition-all font-medium border border-divider/40 hover:border-divider/60 backdrop-blur-sm"
+              className="p-1.5 text-xs text-mid-grey hover:text-charcoal hover:bg-dark-surface/50 rounded-md transition-all font-medium border border-divider/20 hover:border-divider/40 backdrop-blur-sm"
             >
               {isExpanded ? (
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className="flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                   </svg>
                   Collapse
                 </span>
               ) : (
-                <span className="flex items-center gap-1.5">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <span className="flex items-center gap-1">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                   Expand
@@ -128,9 +125,9 @@ const DocumentViewer = ({ type, name, content, onExport }: DocumentViewerProps) 
             </button>
             <button 
               onClick={onExport} 
-              className="px-4 py-2 text-sm bg-amber-gold hover:bg-amber-gold/90 text-white rounded-lg font-semibold hover:shadow-lg transition-all shadow-md hover:shadow-amber-gold/20 flex items-center gap-1.5"
+              className="px-2.5 py-1.5 text-xs bg-dark-surface/10 hover:bg-dark-surface/20 text-mid-grey hover:text-charcoal border border-divider/30 hover:border-divider/50 rounded-md font-semibold transition-all shadow-sm hover:shadow-md flex items-center gap-1"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Export
@@ -139,15 +136,17 @@ const DocumentViewer = ({ type, name, content, onExport }: DocumentViewerProps) 
         </div>
       </div>
       
-      {/* Content */}
-      <div className={`relative transition-all duration-500 ease-out ${isExpanded ? 'max-h-[800px]' : 'max-h-[400px]'}`}>
-        <div className="p-6 overflow-y-auto overflow-x-hidden h-full scrollbar-thin scrollbar-thumb-divider/50 scrollbar-track-transparent" style={{ maxHeight: isExpanded ? '800px' : '400px' }}>
-          <MarkdownRenderer content={content} />
+      {/* Streamlined content */}
+      <div className={`relative transition-all duration-500 ease-out ${isExpanded ? 'max-h-[600px]' : 'max-h-[400px]'}`}>
+        <div className="p-4 overflow-y-auto overflow-x-hidden h-full scrollbar-thin scrollbar-thumb-divider/30 scrollbar-track-transparent" style={{ maxHeight: isExpanded ? '600px' : '400px' }}>
+          <div className="max-w-none">
+            <MarkdownRenderer content={content} />
+          </div>
         </div>
         
-        {/* Fade gradient at bottom when collapsed */}
+        {/* Subtle fade gradient */}
         {!isExpanded && (
-          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-dark-card via-dark-card/80 to-transparent pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-dark-card via-dark-card/80 to-transparent pointer-events-none"></div>
         )}
       </div>
     </div>
