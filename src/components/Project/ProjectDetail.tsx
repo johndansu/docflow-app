@@ -283,7 +283,6 @@ const ProjectDetail = ({ projectId, onClose, onDelete }: ProjectDetailProps) => 
                 <div className="mt-4">
                   <div className="h-[500px]">
                     <SiteFlowVisualizer
-                      initialSiteFlow={project.siteFlow}
                       appDescription={project.description}
                       prdContent={project.documents?.find(doc => doc.type === 'PRD')?.content}
                       projectName={project.title}

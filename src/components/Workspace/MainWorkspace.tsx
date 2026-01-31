@@ -5,6 +5,7 @@ import SiteFlowVisualizer from '../SiteFlow/SiteFlowVisualizer'
 import ExportModal from '../Export/ExportModal'
 import { storage, type SiteFlowData } from '../../utils/storage'
 import { extractInfo, generatePRD, generateDesignPrompt, generateUserStories, generateSpecs } from '../../utils/contentGenerator'
+import type { SiteFlowData as VisualizerSiteFlowData } from '../SiteFlow/SiteFlowVisualizer'
 
 type View = 'input' | 'generating' | 'results'
 
@@ -20,8 +21,8 @@ const MainWorkspace = () => {
   const [isSaving, setIsSaving] = useState(false)
   const [projectName, setProjectName] = useState('')
   const [siteFlowData, setSiteFlowData] = useState<SiteFlowData | null>(null)
-  const handleSiteFlowChange = (flow: SiteFlowData) => {
-    setSiteFlowData(flow)
+  const handleSiteFlowChange = (flow: VisualizerSiteFlowData) => {
+    setSiteFlowData(flow as SiteFlowData)
   }
   const siteFlowRef = useRef<any>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -291,7 +292,6 @@ const MainWorkspace = () => {
           </div>
           <div className="p-4 h-[500px] overflow-hidden">
             <SiteFlowVisualizer 
-              ref={siteFlowRef}
               appDescription={appDescription}
               prdContent={generatedDocs.find(doc => doc.type === 'PRD')?.content}
               projectName={projectName}

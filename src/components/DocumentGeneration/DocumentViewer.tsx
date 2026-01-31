@@ -8,7 +8,7 @@ interface DocumentViewerProps {
   onExport: () => void
 }
 
-const DocumentViewer = ({ type, name, content, onExport }: DocumentViewerProps) => {
+const DocumentViewer = ({ type, content, onExport }: DocumentViewerProps) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const getTypeConfig = (type: string) => {

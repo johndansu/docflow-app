@@ -370,8 +370,6 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
     
     // Generate nodes with proper spacing within container
     const maxNodes = Math.min(allNodes.length + 2, 25) // Increased max nodes for comprehensive structure
-    const containerWidth = 2400 // Reduced width for tighter layout
-    const containerHeight = 1000 // Reduced height for tighter layout
     const nodeSpacing = 200 // Reduced spacing but still enough to prevent overlap
     const rowSpacing = 250 // Reduced spacing but still enough to prevent overlap
     
@@ -417,7 +415,7 @@ const SiteFlowVisualizer: React.FC<SiteFlowVisualizerProps> = ({
     }
     
     // Add all other nodes (excluding Homepage) in a grid layout
-    const otherNodes = allNodes.filter((node, index) => index !== homepageIndex)
+    const otherNodes = allNodes.filter((_, index) => index !== homepageIndex)
     let nodeCounter = 3 // Start after Site Entry (1) and Homepage (2)
     
     otherNodes.slice(0, maxNodes - 3).forEach((node, index) => {

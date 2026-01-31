@@ -1,10 +1,10 @@
 "use client"
 
-import * as React from "react"
-import { motion, useMotionValue, useTransform, AnimatePresence } from "framer-motion"
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
-import { cn } from "../../lib/utils"
+import React from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
+import { ArrowRight, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { cn } from "../../lib/utils"
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return (
@@ -35,22 +35,22 @@ const Login = () => {
   const [rememberMe, setRememberMe] = React.useState(false)
   const { signIn, signUp } = useAuth()
 
-  // For 3D card effect - optimized with throttling
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-300, 300], [5, -5]); // Reduced rotation
-  const rotateY = useTransform(mouseX, [-300, 300], [-5, 5]); // Reduced rotation
+  // For 3D card effect - optimized with throttling (currently disabled)
+  // const mouseX = useMotionValue(0);
+  // const mouseY = useMotionValue(0);
+  // const rotateX = useTransform(mouseY, [-300, 300], [5, -5]); // Reduced rotation
+  // const rotateY = useTransform(mouseX, [-300, 300], [-5, 5]); // Reduced rotation
 
-  const handleMouseMove = React.useCallback((e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    mouseX.set(e.clientX - rect.left - rect.width / 2);
-    mouseY.set(e.clientY - rect.top - rect.height / 2);
-  }, [mouseX, mouseY]);
+  // const handleMouseMove = React.useCallback((e: React.MouseEvent) => {
+  //   const rect = e.currentTarget.getBoundingClientRect();
+  //   mouseX.set(e.clientX - rect.left - rect.width / 2);
+  //   mouseY.set(e.clientY - rect.top - rect.height / 2);
+  // }, [mouseX, mouseY]);
 
-  const handleMouseLeave = React.useCallback(() => {
-    mouseX.set(0);
-    mouseY.set(0);
-  }, [mouseX, mouseY]);
+  // const handleMouseLeave = React.useCallback(() => {
+  //   mouseX.set(0);
+  //   mouseY.set(0);
+  // }, [mouseX, mouseY]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

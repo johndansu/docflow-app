@@ -82,6 +82,14 @@ const localStorageStorage = {
     return true
   },
 
+  async clear(): Promise<void> {
+    try {
+      localStorage.removeItem('docflow-projects')
+    } catch (error) {
+      console.error('Failed to clear localStorage:', error)
+    }
+  },
+
   formatDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString()
   }
@@ -130,6 +138,15 @@ export const storage = {
     } catch (error) {
       console.warn('⚠️ Supabase failed, falling back to localStorage:', error)
       return await localStorageStorage.delete(id)
+    }
+  },
+
+  async clear(): Promise<void> {
+    try {
+      await supabaseStorage.clear()
+    } catch (error) {
+      console.warn('⚠️ Supabase failed, falling back to localStorage:', error)
+      await localStorageStorage.clear()
     }
   },
 
